@@ -1,0 +1,371 @@
+package com.gmail.incuranse_dn.ui.Request;
+
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.SQLException;
+import android.os.Bundle;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.RelativeLayout;
+import android.widget.Toast;
+//import android.widget.Toolbar;
+import androidx.appcompat.widget.Toolbar;
+
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.gmail.incuranse_dn.R;
+import com.gmail.incuranse_dn.ui.Adapters.RVAdapter_req;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class Requests extends AppCompatActivity {
+
+    final protected  String DATA_OPERATION_READ = "DATAOPERATION_READ";
+    final protected  String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    final protected  String DATA_OPERATION_UPDATE = "DATA_OPERATION_UPDATE";
+    final protected String NAME_TAB = "TAB_REQUESTS";
+    final protected String NAME_TAB_IMG = "TAB_IMAGES";
+
+    private static final int CM_DELETE_ID = 1;
+
+    private static final String TITLE = "Авто"; // Верхний текст
+    private static final String DESCRIPTION = "Дата/номер заявки"; // ниже главного
+    private static final String IS_ACTIVE = "Активен";
+    private static final String COUNT_IMAGES = "Количество фото";
+    private static final String _ID = "id заявки";
+
+    private RecyclerView rvReq;
+    private RVAdapter_req rv_adapter_req;
+
+    // создаем массив списков
+    List<Object> reqList = new ArrayList<>();
+
+    HashMap<String, Object> mapListReq;
+
+    Map<String, String> mapSystem = new HashMap<String, String>();
+    Map<String, String> mapParamString = new HashMap<String, String>();
+    Map<String, String> mapType = new HashMap<String, String>();
+    Map<String, ArrayList<String>> mapImage = new HashMap<String, ArrayList<String>>();
+    Map<String, String> mapSystemImg = new HashMap<String, String>();
+
+    int item_position = -1;
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_requests);
+
+        Toolbar tb_req = findViewById(R.id.tb_req);
+        setSupportActionBar(tb_req);
+
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
+
+       // getSupportActionBar().setDisplayShowTitleEnabled(false);
+
+        Button btn_delete_req = tb_req.findViewById(R.id.btn_delete_req);
+
+        btn_delete_req.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (DeleteReestablishCar()){
+                    refreshListReq();
+                    RelativeLayout rl_delete = (RelativeLayout) findViewById(R.id.rl_delete_req);
+                    rl_delete.setVisibility(View.INVISIBLE);
+               }
+            }
+        });
+
+        rvReq = (RecyclerView) findViewById(R.id.rv_list_req);
+
+        RelativeLayout rl_delete = (RelativeLayout) findViewById(R.id.rl_delete_req);
+        rl_delete.setVisibility(View.INVISIBLE);
+
+        tb_req.setNavigationOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onBackPressed();// возврат на предыдущий activity
+            }
+        });
+
+        FloatingActionButton fab_new_req = (FloatingActionButton) findViewById(R.id.fab_req);
+        fab_new_req.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v){
+                    Intent intReq = new Intent(Requests.this, NewRequest.class);
+                    startActivityForResult(intReq,1);
+                }
+        });
+
+        refreshListReq();
+    }
+
+    public void refreshListReq(){
+
+        mapSystem.put("operation", DATA_OPERATION_READ);
+        mapSystem.put("NAME_TAB", NAME_TAB);
+        mapSystem.put("isList", "1");
+
+        mapParamString.put("recNameClient", "");
+        mapParamString.put("reqNameCar", "");
+        mapParamString.put("reqDate", "");
+        mapParamString.put("Number", "");
+        mapParamString.put("countImages","");
+
+        mapType.put("recNameClient", "TEXT");
+        mapType.put("reqNameCar", "TEXT");
+        mapType.put("reqDate", "NUMERIC");
+        mapType.put("Number", "TEXT");
+        mapType.put("countImages","TEXT");
+
+        mapImage.put("listImage", new ArrayList<String>());
+
+        mapSystemImg.put("operation", DATA_OPERATION_READ);
+        mapSystemImg.put("NAME_TAB", NAME_TAB_IMG);
+
+        //очистим лист,заполним заново
+        reqList.clear();
+        rv_adapter_req = new RVAdapter_req(this, reqList);
+        LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
+        rvReq.setLayoutManager(mLayoutManager);
+        rvReq.setAdapter(rv_adapter_req);
+        //rv_adapter.notifyDataSetChanged();
+
+        registerForContextMenu(rvReq);
+
+        try {
+            DBHealper db = new DBHealper(this, this, "data", null, 1,mapParamString,mapSystem,mapType,mapImage,mapSystemImg);
+            //db.close();
+            Cursor cursor = db.RaedDataCursorList(NAME_TAB,"");
+
+            String Number;
+            String Date;
+            String countImages;
+            String Client;
+            String Car;
+            String is_active = "1";
+            String _id;
+
+            while (cursor.moveToNext()) {
+
+                Number = cursor.getString(cursor.getColumnIndex("Number"));
+                Date = cursor.getString(cursor.getColumnIndex("reqDate"));
+                Client = cursor.getString(cursor.getColumnIndex("recNameClient"));
+                Car = cursor.getString(cursor.getColumnIndex("reqNameCar"));
+                is_active = cursor.getString(cursor.getColumnIndex("is_active"));
+                _id = cursor.getString(cursor.getColumnIndex("_id"));
+
+                countImages = cursor.getString(cursor.getColumnIndex("countImages"));
+
+                mapListReq = new HashMap<>();
+
+                mapListReq.put(TITLE, Car);
+                mapListReq.put(DESCRIPTION, "Date: " + Date + " Number: " + Number);
+                mapListReq.put(COUNT_IMAGES,"к-во фото: " + countImages);
+                mapListReq.put(IS_ACTIVE,is_active);
+                mapListReq.put(_ID,_id);
+
+                reqList.add(mapListReq);
+
+            }
+            cursor.close();
+
+            rv_adapter_req = new RVAdapter_req(this, reqList);
+            mLayoutManager = new LinearLayoutManager(this);
+            rvReq.setLayoutManager(mLayoutManager);
+            rvReq.setAdapter(rv_adapter_req);
+            rv_adapter_req.notifyDataSetChanged();
+
+            registerForContextMenu(rvReq);
+
+            rv_adapter_req.setOnItemClickListener(new RVAdapter_req.ClickListener() {
+                @Override
+                public void onItemClick(int position, View v) {
+                    Intent  intent = new Intent(getApplicationContext(),NewRequest.class);
+                    intent.putExtra("id_req", position+1);
+                    intent.putExtra("openOldReq",true);
+                    startActivityForResult(intent,1);
+                }
+
+                @Override
+                public boolean onItemLongClick(int position, View v) {
+                    item_position = position;
+                    if (position>-1){
+                        RelativeLayout rl_delete = (RelativeLayout) findViewById(R.id.rl_delete_req);
+                        rl_delete.setVisibility(View.VISIBLE);
+                    }
+                    else {
+                        RelativeLayout rl_delete = (RelativeLayout) findViewById(R.id.rl_delete_req);
+                        rl_delete.setVisibility(View.INVISIBLE);
+                    }
+                    return true;
+                }
+            });
+
+
+        }catch(SQLException ex){
+            Toast.makeText(getApplicationContext(), "ERROR gettind data!",Toast.LENGTH_SHORT).show();
+            return;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (data == null) {
+            refreshListReq();
+            return;
+        }
+
+        if (requestCode == 1) {
+            if (resultCode == this.RESULT_OK) {
+
+                RecyclerView rvReq = (RecyclerView) findViewById(R.id.rv_list_req);
+                String ac = data.getStringExtra("ac");
+
+                if (ac.equals(DATA_OPERATION_SAVE)) {
+
+                    //mapListReq = new HashMap<>();
+
+                    // mapListReq.put(TITLE, data.getStringExtra("car"));
+                    // mapListReq.put(DESCRIPTION, "Date: " + data.getStringExtra("reqDate")
+                    //          + " Number: " + data.getStringExtra("Number"));
+                    // mapListReq.put(COUNT_IMAGES,"к-во фото: " + data.getStringExtra("countImages"));
+                    // mapListReq.put(IS_ACTIVE,data.getStringExtra("is_active"));
+                    //  mapListReq.put(_ID,data.getStringExtra("_id"));
+
+                    //  reqList.add(mapListReq);
+
+
+                    //   rv_adapter_req = new RVAdapter_req(this, reqList);
+                    //  rvReq.setAdapter(rv_adapter_req);
+                    //   rv_adapter_req.notifyDataSetChanged();
+                    refreshListReq();
+
+                } else {
+                    String id = data.getStringExtra("_id");
+                    int positionList = Integer.parseInt(id) - 1;
+
+                    reqList.remove(positionList);
+
+                    mapListReq = new HashMap<>();
+                    mapListReq.put(TITLE,data.getStringExtra("car"));
+                    mapListReq.put(DESCRIPTION, "Date: " + data.getStringExtra("reqDate")
+                            + " Number: " + data.getStringExtra("Number"));
+                    mapListReq.put(COUNT_IMAGES,"к-во фото: " + data.getStringExtra("countImages"));
+                    mapListReq.put(IS_ACTIVE, data.getStringExtra("is_active"));
+                    mapListReq.put(_ID, id);
+                    reqList.add(mapListReq);
+
+                    rv_adapter_req = new RVAdapter_req(this, reqList);
+                    rvReq.setAdapter(rv_adapter_req);
+                    // rv_adapter_req.notifyDataSetChanged();
+
+                }
+
+                registerForContextMenu(rvReq);
+            }
+            if (resultCode == this.RESULT_CANCELED) {
+                //Write your code if there no result
+            }
+            // refreshListReq();
+        }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+
+        int id = item.getItemId();
+
+        if (id == R.id.action_settings) {
+            return true;
+        }else
+        if (id==android.R.id.home){
+            finish();
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    public boolean DeleteReestablishCar(){
+
+        boolean successfully = true;
+
+        if (rv_adapter_req != null) {
+
+            // получаем инфу о пункте списка
+            int item_id = item_position + 1;
+            String _id = Integer.toString(item_id);
+            String value_is_active = "1";
+
+            try {
+                DBHealper db = new DBHealper(this, this, "data", null, 1,null,null,null,null,null);
+
+                //прочитаем все данные выбранного объекта и сформируем системные таблицы для "удаления"
+                Cursor cursor = db.RaedDataCursor(NAME_TAB, _id, null);
+
+                if (cursor.moveToFirst()) {
+                    for (String nameColumn : cursor.getColumnNames()) {
+
+                        if (nameColumn.equals("is_active")) {
+
+                            value_is_active = cursor.getString(cursor.getColumnIndex(nameColumn));
+
+                            if (value_is_active.equals("1")) {
+                                value_is_active = "0";}
+                            else{
+                                value_is_active = "1";
+                            }
+
+                            mapParamString.put(nameColumn, value_is_active);
+                        } else {
+                            mapParamString.put(nameColumn, cursor.getString(cursor.getColumnIndex(nameColumn)));
+                        }
+
+                    }
+                }
+                DBHealper db_update = new DBHealper(this, this, "data", null, 1,mapParamString,mapSystem,mapType,null,null);
+                //меняем признак активности на 0
+                if (db_update.updateData(_id)) {
+                    if (value_is_active.equals("1")){
+                        Toast.makeText(getApplicationContext(), "request is reestablish!", Toast.LENGTH_SHORT).show();
+                    }else {
+                        Toast.makeText(getApplicationContext(), "request is delete!", Toast.LENGTH_SHORT).show();
+                    }
+
+                    Intent returnIntentReq = new Intent();
+
+                    returnIntentReq.putExtra("car", mapParamString.get("NameCar"));
+                    returnIntentReq.putExtra("_id", _id);
+                    returnIntentReq.putExtra("ac", DATA_OPERATION_UPDATE);
+                    returnIntentReq.putExtra("is_active", value_is_active);
+                    returnIntentReq.putExtra("reqDate", mapParamString.get("reqDate"));
+                    returnIntentReq.putExtra("Number", mapParamString.get("Number"));
+                    returnIntentReq.putExtra("countImages", mapParamString.get("countImages"));
+                    onActivityResult(1, RESULT_OK, returnIntentReq);
+
+                } else {
+                    Toast.makeText(getApplicationContext(), "ERROR operation with request!", Toast.LENGTH_SHORT).show();
+                    successfully = false;
+                }
+
+            } catch (SQLException ex) {
+                Toast.makeText(getApplicationContext(), "ERROR operation with request!", Toast.LENGTH_SHORT).show();
+                successfully = false;
+            }
+        }
+        return successfully;
+    }
+
+
+}

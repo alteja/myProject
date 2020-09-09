@@ -1,0 +1,736 @@
+package com.gmail.incuranse_dn.ui.main;
+
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.database.SQLException;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.telephony.SmsManager;
+import android.view.View;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.gmail.incuranse_dn.ui.Exchange.JSONPlaceHolderApi;
+import com.gmail.incuranse_dn.ui.Exchange.JsonParser;
+
+import com.gmail.incuranse_dn.ui.Exchange.MyCallbackPhone;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.listCustomers;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.listCustomersPhone;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerPhone;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomers;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_requests.listRequests;
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.gmail.incuranse_dn.R;
+import com.google.android.material.textfield.TextInputEditText;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.security.Key;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+public class Autorisation extends AppCompatActivity implements View.OnClickListener {
+
+    final protected String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    final protected String DATA_OPERATION_READ = "DATA_OPERATION_READ";
+    final protected String DATA_OPERATION_UPDATE = "DATA_OPERATION_UPDATE";
+
+    final protected String NAME_TAB = "TAB_USER";
+
+    String Login = "";
+    String LoginDB = "";
+    String Password = "";
+    String PasswordDB = "";
+    String idCustomer = "";
+    Boolean SavePasswordOld = false;
+    Boolean SavePasswordNew = false;
+
+    TextInputEditText ti_login;
+    TextInputEditText ti_pass;
+    CheckBox check_save_password;
+    Button btn_intrance;
+    TextView getPasswordSMS;
+    short numAttemps = 1;
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.avtorisation);
+
+        //this.deleteDatabase("data");
+
+       // String appPath = getApplicationContext().getFilesDir().getAbsolutePath();
+
+        Map<String, String> mapSystem;
+        ti_login = (TextInputEditText) findViewById(R.id.Login);
+
+        getPasswordSMS = (TextView) findViewById(R.id.tv_getPassword);
+        getPasswordSMS.setOnClickListener(this);
+
+        Boolean sendSMS = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.SEND_SMS}, 1);
+                sendSMS = true;
+            }
+        }
+
+
+        getPasswordSMS.setOnClickListener(new View.OnClickListener() {
+
+                                              public void onClick(View v) {
+                                                  String numberPhone = ti_login.getText().toString();
+
+                                                  double randDouble = 1 + Math.random() * 9998;
+                                                  int randInt = (int) randDouble;
+
+                                                  String textSMS = "Parol vhoda v prilojenie Insurance: " + randInt;
+
+                                                  if (numberPhone == "") {
+                                                      Toast.makeText(getBaseContext(), "Укажите номер телефона.", Toast.LENGTH_SHORT).show();
+                                                  } else {
+                                                      try {
+
+                                                          SmsManager smsManager = SmsManager.getDefault();
+                                                          smsManager.sendTextMessage(numberPhone, null, textSMS, null, null);
+                                                          Toast.makeText(getApplicationContext(),
+                                                                  "SMS отправлено!", Toast.LENGTH_LONG).show();
+                                                      } catch (Exception e) {
+                                                          Toast.makeText(getApplicationContext(),
+                                                                  "SMS не отправлено, попытайтесь еще!", Toast.LENGTH_LONG).show();
+                                                          e.printStackTrace();
+                                                      }
+                                                  }
+
+                                              }
+                                          }
+        );
+
+        ti_pass = (TextInputEditText) findViewById(R.id.Password);
+        check_save_password = (CheckBox) findViewById(R.id.save_password);
+
+
+        btn_intrance = (Button) findViewById(R.id.btn_intrance);
+        btn_intrance.setOnClickListener(this);
+
+        Login = ti_login.getText().toString();
+        Password = ti_pass.getText().toString();
+        SavePasswordOld = check_save_password.isChecked();
+
+        CreateAllTablesDB();
+
+        // Map<String, String> mapParamString = new HashMap<String, String>();
+        mapSystem = new HashMap<String, String>();
+        mapSystem.put("NAME_TAB", NAME_TAB);
+        mapSystem.put("operation", DATA_OPERATION_READ);
+
+        DBHealper dbUser = new DBHealper(this, this, "data", null, 1, null, mapSystem, null);
+
+        //Получим данные авторизации из БД
+        Cursor cursor_user = dbUser.RaedDataCursor(NAME_TAB, "1", "");
+
+        if (cursor_user.moveToFirst()) {
+
+            LoginDB = cursor_user.getString(cursor_user.getColumnIndex("login"));
+            PasswordDB = cursor_user.getString(cursor_user.getColumnIndex("password"));
+            idCustomer = cursor_user.getString(cursor_user.getColumnIndex("idClientJSON"));
+            SavePasswordOld = Boolean.parseBoolean(cursor_user.getString(cursor_user.getColumnIndex("savePass")));
+            SavePasswordNew = SavePasswordOld;
+            Login = LoginDB;
+            Password = PasswordDB;
+
+        }
+
+        ti_login.setText(Login);
+
+        check_save_password.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+
+                if (isChecked) {
+                    SavePasswordNew = true;
+                } else {
+                    Password = "";
+                    SavePasswordNew = false;
+                }
+
+            }
+        });
+
+        if (SavePasswordNew) {
+            ti_pass.setText(Password);
+            check_save_password.setChecked(true);
+        } else {
+            ti_pass.setText("");
+            check_save_password.setChecked(false);
+        }
+
+    }
+
+    public void CreateAllTablesDB() {
+        //создадим все таблицы в db при запуске приложения
+
+        Map<String, String> mapParamString = new HashMap<String, String>();
+        Map<String, String> mapSystem = new HashMap<String, String>();
+        Map<String, String> mapType = new HashMap<String, String>();
+        Map<String, String> mapParamImg = new HashMap<String, String>();
+        Map<String, String> mapTypeImg = new HashMap<String, String>();
+        Map<String, String> mapSystemImg = new HashMap<String, String>();
+
+        //системные данные основной таблицы
+
+        ///////////////////////////////////////
+        //COMPANIES
+        mapSystem.put("NAME_TAB", "TAB_COMPANY");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных таблицы организаций
+        mapType.put("NameCompany", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица организации
+        mapParamString.put("NameCompany", "");
+        mapParamString.put("is_active", "");
+
+        DBHealper dbCompanies = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbCompanies.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        //CONTRACTS
+        mapSystem.put("NAME_TAB", "TAB_CONTRACT");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных таблицы договоров
+        mapType.put("CompanyContract", "TEXT");
+        mapType.put("id_company", "TEXT");
+        mapType.put("id_contract", "TEXT");
+        mapType.put("NumberContract", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица договора
+        mapParamString.put("NameCompany", "");
+        mapParamString.put("id_company", "");
+        mapParamString.put("is_active", "");
+
+        DBHealper dbContracts = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbContracts.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        ///////////////////////////////////////
+        //CARS
+        mapSystem.put("NAME_TAB", "TAB_CARS");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных таблицы автомобилей
+        mapType.put("NameCar", "TEXT");
+        mapType.put("MarkaCar", "TEXT");
+        mapType.put("id_MarkaCar", "TEXT");
+        mapType.put("id_ModelCar", "TEXT");
+        mapType.put("ModelCar", "TEXT");
+        mapType.put("KPPCar", "TEXT");
+        mapType.put("VIN", "TEXT");
+        mapType.put("YearCreateCar", "TEXT");
+        mapType.put("MeleageCar", "TEXT");
+        mapType.put("CountryNumber", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица автомобиля
+        mapParamString.put("NameCar", "");
+        mapParamString.put("MarkaCar", "");
+        mapParamString.put("ModelCar", "");
+        mapParamString.put("KPPCar", "");
+        mapParamString.put("VIN", "");
+        mapParamString.put("YearCreateCar", "");
+        mapParamString.put("MeleageCar", "");
+        mapParamString.put("id_MarkaCar", "");
+        mapParamString.put("id_ModelCar", "");
+        mapParamString.put("CountryNumber", "");
+        mapParamString.put("is_active", "");
+
+        DBHealper dbCars = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbCars.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        //////////////////////////////////////////////////////
+        //CLIENTS
+        mapSystem.put("NAME_TAB", "TAB_CLIENTS");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("NameClient", "TEXT");
+        mapType.put("FamClient", "TEXT");
+        mapType.put("PatronymicClient", "TEXT");
+        mapType.put("INNClient", "TEXT");
+        mapType.put("DateBirthClient", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица клиентов
+        mapParamString.put("NameClient", "");
+        mapParamString.put("FamClient", "");
+        mapParamString.put("PatronymicClient", "");
+        mapParamString.put("INNClient", "");
+        mapParamString.put("DateBirthClient", "");
+        mapParamString.put("is_active", "");
+
+        //передаем данные
+        DBHealper dbClients = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbClients.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        ///////////////////////////////////////////
+        //REQUESTS
+        mapSystem.put("NAME_TAB", "TAB_REQUESTS");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        mapSystemImg.put("NAME_TAB", "TAB_IMAGES");
+        mapSystemImg.put("MainTab", "TAB_REQUESTS");
+
+        mapParamImg.put("UrlImage", "");
+        mapParamImg.put("id_main", "");
+        mapParamImg.put("MainTab", "");
+        mapParamImg.put("id_mainJSON", "");
+
+        mapTypeImg.put("UrlImage", "TEXT");
+        mapTypeImg.put("id_main", "TEXT");
+        mapTypeImg.put("MainTab", "TEXT");
+        mapTypeImg.put("id_mainJSON", "TEXT");
+
+        //типы данных основной таблицы
+        mapType.put("recNameClient", "TEXT");
+        mapType.put("recNameCompany", "TEXT");
+        mapType.put("reqNameCar", "TEXT");
+        mapType.put("id_reqClient", "TEXT");
+        mapType.put("id_reqCompany", "TEXT");
+        mapType.put("id_reqCar", "TEXT");
+        mapType.put("reqDate", "TEXT");
+        mapType.put("Number", "TEXT");
+        mapType.put("latitude", "TEXT");
+        mapType.put("longitude", "TEXT");
+        mapType.put("Coordinates", "");
+        mapType.put("countImages", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица заявки
+        mapParamString.put("recNameClient", "");
+        mapParamString.put("recNameCompany", "");
+        mapParamString.put("reqNameCar", "");
+        mapParamString.put("id_reqClient", "");
+        mapParamString.put("id_reqCompany", "");
+        mapParamString.put("id_reqCar", "");
+        mapParamString.put("reqDate", "");
+        mapParamString.put("Number", "");
+        mapParamString.put("latitude", "");
+        mapParamString.put("longitude", "");
+        mapParamString.put("Coordinates", "");
+        mapParamString.put("countImages", "0");
+        mapParamString.put("is_active", "");
+
+
+        DBHealper dbReq = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType, null, mapSystemImg, mapParamImg, mapTypeImg);
+        dbReq.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+        mapSystemImg.clear();
+        mapParamImg.clear();
+        mapTypeImg.clear();
+
+        //////////////////////////////////////
+        //МАРКИ АВТО
+        mapSystem.put("NAME_TAB", "TAB_MARK_CAR");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("NameMarkCar", "TEXT");
+        mapType.put("id_MarcCar", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица
+        mapParamString.put("NameMarkCar", "");
+        mapParamString.put("id_MarcCar", "");
+        mapParamString.put("is_active", "TEXT");
+
+        DBHealper dbMark = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbMark.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        //////////////////////////////////////
+        //МОДЕЛИ АВТО
+        mapSystem.put("NAME_TAB", "TAB_MODEL_CAR");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("NameModelCar", "TEXT");
+        mapType.put("id_ModelCar", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица
+        mapParamString.put("NameModelCar", "");
+        mapParamString.put("id_ModelCar", "");
+        mapParamString.put("is_active", "TEXT");
+
+        DBHealper dbModel = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbModel.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        ////////////////////////////////////////////
+        //MARKA_MODEL
+        mapSystem.put("NAME_TAB", "TAB_MARKA_MODEL_CAR");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("NameMarka", "TEXT");
+        mapType.put("id_Marka", "TEXT");
+        mapType.put("NameModel", "TEXT");
+        mapType.put("id_Model", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица заявки
+        mapParamString.put("NameMarka", "");
+        mapParamString.put("id_Marka", "");
+        mapParamString.put("NameModel", "");
+        mapParamString.put("id_Model", "");
+        mapParamString.put("is_active", "");
+
+        DBHealper dbMarkaModel = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbMarkaModel.onCreate(null);
+
+        ///////////////////////////////
+        //КОНТАКТНАЯ ИНФОРМАЦИЯ КЛИЕНТА
+        mapSystem.put("NAME_TAB", "TAB_CONTACTS_CLIENTS");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("type_contact", "TEXT");
+        mapType.put("view_contact", "TEXT");
+        mapType.put("contact", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица телефонов/e-mail
+        mapParamString.put("type_contact", "");
+        mapParamString.put("view_contact", "");
+        mapParamString.put("contact", "");
+        mapParamString.put("is_active", "");
+
+        DBHealper dbTelephones = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbTelephones.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        ///////////////////////////////
+        //КОНТАКТНАЯ ИНФОРМАЦИЯ СТРАХОВОЙ КОМПАНИИ
+        mapSystem.put("NAME_TAB", "TAB_CONTACTS_INCURANSE");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        //типы данных основной таблицы
+        mapType.put("type_contact", "TEXT");
+        mapType.put("id_company", "TEXT");
+        mapType.put("view_contact", "TEXT");
+        mapType.put("contact", "TEXT");
+        mapType.put("is_active", "TEXT");
+
+        //основная таблица телефонов/e-mail
+        mapParamString.put("id_company", "1");
+        mapParamString.put("type_contact", "Телефон");
+        mapParamString.put("view_contact", "Основной");
+        mapParamString.put("contact", "+380979202815");
+        mapParamString.put("is_active", "1");
+
+        DBHealper dbPhoneIncuranse = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbPhoneIncuranse.onCreate(null);
+        dbPhoneIncuranse.AddData();
+
+        //добавим еще одну запись с e-mail
+        mapParamString = new HashMap<String, String>();
+        mapParamString.put("id_company", "1");
+        mapParamString.put("type_contact", "e-mail");
+        mapParamString.put("view_contact", "Основной");
+        mapParamString.put("contact", "oshcherbakova85@gmail.com");
+        mapParamString.put("is_active", "1");
+
+        DBHealper dbEmailIncuranse = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbEmailIncuranse.AddData();
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        /////////////////////////////////////////////////
+        //USER
+        mapSystem.put("NAME_TAB", "TAB_USER");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        mapType.put("login", "TEXT");
+        mapType.put("password", "TEXT");
+        mapType.put("savePass", "TEXT");
+        mapType.put("idClientJSON", "TEXT");
+
+        mapParamString.put("login", "");
+        mapParamString.put("password", "");
+        mapParamString.put("savePass", "");
+        mapParamString.put("idClientJSON", "");
+
+        DBHealper dbUser = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType);
+        dbUser.onCreate(null);
+
+        mapParamString.clear();
+        mapSystem.clear();
+        mapType.clear();
+
+        /////////////////////////////////////////////////
+        //changes tables
+        mapSystem.put("NAME_TAB", "CHANGES_TAB");
+        mapSystem.put("operation", DATA_OPERATION_SAVE);
+
+        mapType.put("MainTab"  , "TEXT"); //имя таблицы объекта, чьи картинки будут сохранены
+        mapType.put("idObj"    , "TEXT");
+        mapType.put("idObjJSON", "TEXT");
+        mapType.put("isActive" , "TEXT");
+
+        mapParamString.put("MainTab"  , "");
+        mapParamString.put("idObj"    , "");
+        mapParamString.put("idObjJSON", "");
+        mapParamString.put("isActive" , "");
+
+        mapSystemImg.put("NAME_TAB", "CHANGES_TAB_IMAGES");
+        mapSystemImg.put("MainTab" , "CHANGES_TAB");
+
+        mapParamImg.put("UrlImage"   , "");
+        mapParamImg.put("id_main"    , "");
+        mapParamImg.put("id_mainJSON", "");
+        mapParamImg.put("MainTab"    , "");
+
+        mapTypeImg.put("UrlImage"   , "TEXT");
+        mapTypeImg.put("id_main"    , "TEXT");
+        mapTypeImg.put("id_mainJSON", "TEXT");
+        mapTypeImg.put("MainTab"    , "TEXT");
+
+        DBHealper dbChangesTab = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, mapType, null, mapSystemImg, mapParamImg, mapTypeImg);
+        dbChangesTab.onCreate(null);
+
+    }
+
+
+    @Override
+    public void onClick(View v) {
+
+
+        TextView tv_sucsessfull_avtorisation = (TextView) findViewById(R.id.tv_sucsessfull_avtorisation);
+
+        Login = ti_login.getText().toString();
+        Password = ti_pass.getText().toString();
+        SavePasswordNew = check_save_password.isChecked();
+
+        if (Login.length() == 0) {
+            tv_sucsessfull_avtorisation.setText("Не задан логин!");
+            return;
+        }
+
+        if (Password.length() == 0) {
+            tv_sucsessfull_avtorisation.setText("Не задан пароль!");
+            return;
+        }
+        //если это первая авторизация, авторизируемся на сервере
+        if (LoginDB.length() == 0 && PasswordDB.length() == 0) {
+
+            final MyCallbackPhone callback = new MyCallbackPhone() {
+                @Override
+                public void success(String result) {
+                    idCustomer = result;
+
+                    //если пользователь с номером телефона найден в базе, тогда продолжаем авторизацию
+                    if (idCustomer.length() > 0) {
+                        successfulAuthorization();
+                    }
+                }
+
+                @Override
+                public void failure(Throwable t) {
+                    idCustomer = "";
+                    failureAuthorization();
+
+                }
+            };
+            getIdClientFromServer(Login, callback);
+
+        } else {
+            if (!LoginDB.equals(Login)) {
+                tv_sucsessfull_avtorisation.setText("Логин неверный!");
+                return;
+            }
+            if (!PasswordDB.equals(Password)) {
+                tv_sucsessfull_avtorisation.setText("Пароль неверный!");
+                numAttemps++;
+                return;
+            }
+
+            if (LoginDB.equals(Login) && PasswordDB.equals(Password)) {
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.putExtra("idClientJSON",idCustomer);
+                startActivity(intent);
+                this.finish();
+            }
+
+            if (SavePasswordOld != SavePasswordNew) {
+
+                Map<String, String> mapSystemNew = new HashMap<String, String>();
+                mapSystemNew.put("NAME_TAB", NAME_TAB);
+                mapSystemNew.put("operation", DATA_OPERATION_UPDATE);
+
+                Map<String, String> mapParamStringNew = new HashMap<String, String>();
+                mapParamStringNew.put("login", Login);
+                mapParamStringNew.put("password", Password);
+                mapParamStringNew.put("savePass", SavePasswordNew.toString());
+                mapParamStringNew.put("idClientJSON", idCustomer);
+
+                DBHealper dbUserSaveP = new DBHealper(this, this, "data", null, 1, mapParamStringNew, mapSystemNew, null);
+
+                try {
+                    dbUserSaveP.updateData("1");
+                } catch (SQLException e) {
+
+                }
+
+            }
+
+            //ограничение количества попыток ввода пароля
+            if (numAttemps >= 10) {
+                tv_sucsessfull_avtorisation.setBackgroundColor(Color.RED);
+                tv_sucsessfull_avtorisation.setText("Количество попыток входа превышено");
+                btn_intrance.setEnabled(false);
+                return;
+            }
+        }
+
+
+    }
+
+    public void failureAuthorization() {
+
+        TextView tv_sucsessfull_avtorisation = (TextView) findViewById(R.id.tv_sucsessfull_avtorisation);
+        tv_sucsessfull_avtorisation.setText("Сбой авторизации. Указанный номер телефона отсутствует в страховых договорах.");
+    }
+
+    public void successfulAuthorization() {
+
+        TextView tv_sucsessfull_avtorisation = (TextView) findViewById(R.id.tv_sucsessfull_avtorisation);
+
+        Map<String, String> mapParamString = new HashMap<String, String>();
+
+        Map<String, String> mapSystem = new HashMap<String, String>();
+        mapSystem.put("NAME_TAB", NAME_TAB);
+        mapSystem.put("operation", DATA_OPERATION_UPDATE);
+
+        mapParamString.put("login", Login);
+        mapParamString.put("password", Password);
+        mapParamString.put("savePass", SavePasswordNew.toString());
+        mapParamString.put("idClientJSON", idCustomer);
+
+        DBHealper dbUser = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, null);
+
+        dbUser.AddData();
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("idClientJSON", idCustomer);
+        LoginDB = Login;
+        PasswordDB = Password;
+        SavePasswordOld = SavePasswordNew;
+        startActivity(intent);
+        this.finish();
+
+    }
+
+    public void getIdClientFromDB(){
+
+    }
+
+    public void getIdClientFromServer(String numberPhone, final MyCallbackPhone callback) {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        long numberPhoneLong = Long.parseLong(numberPhone);
+        Call<listCustomersPhone> call = apiEx.getJSONСCustomerId(numberPhoneLong);
+
+        call.enqueue(new Callback<listCustomersPhone>() {
+
+            @Override
+            public void onResponse(Call<listCustomersPhone> call, Response<listCustomersPhone> response) {
+                if (response.isSuccessful()) {
+
+                    List masPhones = response.body().getListCustomerPhones();
+
+                    for (int i = 0; i < masPhones.size(); i++) {
+
+                        pojoCustomerPhone pojoPhone = (com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerPhone) masPhones.get(i);
+                        idCustomer = pojoPhone.getCustomerId();
+
+                    }
+
+                    if (idCustomer.length()==0){
+                        callback.failure(new Throwable());
+                    }else {
+                        callback.success(idCustomer);
+                    }
+                } else {
+
+                    Toast.makeText(getBaseContext(), response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listCustomersPhone> call, Throwable t) {
+                Toast.makeText(getBaseContext(), "Проблемы с подключением к серверу.Проверьте интернет!", Toast.LENGTH_SHORT).show();
+                callback.failure(t);
+            }
+        });
+
+    }
+
+
+}

@@ -1,0 +1,1067 @@
+package com.gmail.incuranse_dn.ui.Request;
+
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatTextView;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Date;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.ContentValues;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.database.SQLException;
+import android.graphics.Bitmap;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.provider.Settings;
+import android.view.ContextMenu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Adapter;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.Button;
+import android.widget.GridView;
+import android.widget.ImageButton;
+import android.widget.ListAdapter;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.gmail.incuranse_dn.ui.main.Exchange;
+import com.gmail.incuranse_dn.ui.main.MainClass;
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.gmail.incuranse_dn.ui.ui.other.DetailImageActivity;
+import com.gmail.incuranse_dn.R;
+import com.gmail.incuranse_dn.ui.Adapters.ImageAdapter;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnSuccessListener;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class NewRequest extends AppCompatActivity implements View.OnClickListener {
+
+    final protected String NAME_TAB = "TAB_REQUESTS";
+    final protected String NAME_TAB_CARS = "TAB_CARS";
+    final protected String NAME_TAB_IMG = "TAB_IMAGES";
+    final protected String TAB_CLIENTS = "TAB_CLIENTS";
+    final protected String TAB_COMPANY = "TAB_COMPANY";
+    final protected String TAB_CHANGES = "CHANGES_TAB";
+    final protected String TAB_CHANGES_IMG = "CHANGES_TAB_IMAGES";
+
+    final protected String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    final protected String DATA_OPERATION_READ = "DATAOPERATION_READ";
+    final protected String DATA_OPERATION_UPDATE = "DATAOPERATION_UPDATE";
+
+    final protected int MY_PERMISSIONS_REQUEST_CAMERA = 100;
+    final protected int MY_PERMISSIONS_REQUEST_GALLERY = 300;
+    final protected int MY_PERMISSIONS_REQUEST_GPS = 200;
+    final protected int MY_PERMISSIONS_REQUEST_NETWORK = 400;
+
+
+    Spinner spReqCar;
+    Spinner spReqCompany;
+    Intent intent;
+
+    // String Date = new SimpleDateFormat("dd.M.yyyy").format(Calendar.getInstance().getTime());
+    String Date = new SimpleDateFormat("yyyy/M/dd hh:mm:ss").format(Calendar.getInstance().getTime());
+    String number;
+    String nameCar;
+    String nameCompany;
+    String nameClient;
+    String is_active = "1";
+
+    int id_req_int;
+    String id_req;
+    String id_cl;
+    String id_JSON = "";
+    boolean openOldReq = false;
+    public ArrayList<Uri> masUri = new ArrayList<Uri>();
+
+    Toolbar tb_new_req;
+
+    private LocationManager locationManager;
+    String latitude;
+    String longitude;
+
+    Map<String, String> mapCars = new HashMap<String, String>();
+    Map<String, String> mapCompanies = new HashMap<String, String>();
+
+    //получим первоначальные данные для дальнейшего получения изменений.
+    Map<String, String> initialData = new HashMap<String, String>();
+
+    ArrayList<String> listIMGChanges = new ArrayList<String>();
+
+    TextView tv_location;
+    TextView recNameClient;
+    int posPhoto;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_new_request);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getBaseContext(), "Включите разреение GPS для приложения", Toast.LENGTH_SHORT).show();
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_GPS);
+
+                //  Toast.makeText(getBaseContext(), "Включите разрешение интернет для приложения", Toast.LENGTH_SHORT).show();
+                //  ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, MY_PERMISSIONS_REQUEST_NETWORK);
+
+                return;
+
+            }
+
+        }
+        FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        fusedLocationClient.getLastLocation()
+                .addOnSuccessListener(this, new OnSuccessListener<Location>() {
+                    @Override
+                    public void onSuccess(Location location) {
+                        // Got last known location. In some rare situations this can be null.
+                        if (location != null) {
+                            // Logic to handle location object
+                            setLocationView(location);
+                        }
+                    }
+                });
+
+
+        setView();
+
+        refresh_rv_req();
+
+    }
+
+    public boolean isLocationServiceEnabled() {
+
+        boolean gps_enabled = false, network_enabled = false;
+
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        try {
+            gps_enabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        } catch (Exception ex) {
+            //do nothing...
+        }
+
+        try {
+            network_enabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        } catch (Exception ex) {
+            //do nothing...
+        }
+
+        return gps_enabled || network_enabled;
+
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        //устанавливаем местоположение только для новых заявок ДТП
+        if (openOldReq) {
+            return;
+        }
+
+    }
+
+
+
+    public void setView() {
+
+        tv_location = (TextView) findViewById(R.id.tv_location);
+
+        spReqCar = (Spinner) findViewById(R.id.reqCar);
+        spReqCompany = (Spinner) findViewById(R.id.reqCompany);
+        recNameClient = (TextView) findViewById(R.id.recNameClient);
+
+        ImageButton btnAddPhotoReq = (ImageButton) findViewById(R.id.btnAddPhotoReq);
+        ImageButton btnAddPfotoCamera = (ImageButton) findViewById(R.id.btnAddPfotoCamera);
+        btnAddPhotoReq.setOnClickListener(this);
+        btnAddPfotoCamera.setOnClickListener(this);
+
+        tb_new_req = findViewById(R.id.tb_req);
+        setSupportActionBar(tb_new_req);
+
+        getSupportActionBar().setTitle("Заявка ДТП");
+
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
+
+        Button btn_save_req = tb_new_req.findViewById(R.id.btn_save_req);
+        btn_save_req.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (openOldReq) {
+                    SaveRequest(DATA_OPERATION_UPDATE);
+                } else {
+                    SaveRequest(DATA_OPERATION_SAVE);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onCreateContextMenu(ContextMenu menu, View v,
+                                    ContextMenu.ContextMenuInfo menuInfo) {
+        super.onCreateContextMenu(menu, v, menuInfo);
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.activity_image, menu);
+    }
+
+    public void refresh_rv_req() {
+
+        //setContentView(R.layout.activity_new_request);
+
+        try {
+            intent = getIntent();
+            id_req_int = intent.getExtras().getInt("id_req");
+            id_req = Integer.toString(id_req_int);
+            openOldReq = intent.getExtras().getBoolean("openOldReq");
+        } catch (Exception e) {
+            // return;
+        }
+
+        Cursor cursor_req = null;
+        Cursor cursorImg = null;
+        Cursor cursor_cars = null;
+        Cursor cursor_clients = null;
+        Cursor cursor_company = null;
+
+        //это вызов из списка заявок. Нужно достать заявку из базы и подгрузить данные в активити заявки
+        if (openOldReq) {
+
+            //запросим разрешение на чтение фотографий
+            Map<String, String> mapSystem = new HashMap<String, String>();
+            mapSystem.put("operation", DATA_OPERATION_READ);
+            mapSystem.put("NAME_TAB", NAME_TAB);
+
+            //получим основную таблицу
+            DBHealper db = new DBHealper(this, this, "data", null, 1, null, mapSystem, null, null, null);
+            cursor_req = db.RaedDataCursor(NAME_TAB, id_req, "");
+
+            Map<String, String> mapSystemImg = new HashMap<String, String>();
+            mapSystemImg.put("operation", DATA_OPERATION_READ);
+            mapSystemImg.put("NAME_TAB", NAME_TAB_IMG);
+
+            //получим данные из таблицы картинок
+            DBHealper dbImg = new DBHealper(this, this, "data", null, 1, null, mapSystemImg, null, null, null);
+            cursorImg = dbImg.RaedDataImage(NAME_TAB_IMG, id_req, "");
+
+        } else {
+
+        }
+
+        //получим клиента по умолчанию
+        Map<String, String> mapSystemClient = new HashMap<String, String>();
+        mapSystemClient.put("operation", DATA_OPERATION_READ);
+        mapSystemClient.put("NAME_TAB", TAB_CLIENTS);
+
+        DBHealper db_clients = new DBHealper(this, this, "data", null, 1, null, mapSystemClient, null, null, null);
+        cursor_clients = db_clients.RaedDataCursorList(TAB_CLIENTS, "");
+        setClient(cursor_clients);
+
+        //получим все активные автомобили
+        Map<String, String> mapSystemCar = new HashMap<String, String>();
+        mapSystemCar.put("operation", DATA_OPERATION_READ);
+        mapSystemCar.put("NAME_TAB", NAME_TAB_CARS);
+
+        DBHealper db_cars = new DBHealper(this, this, "data", null, 1, null, mapSystemCar, null, null, null);
+        cursor_cars = db_cars.RaedDataCursorList(NAME_TAB_CARS, "");
+
+        //получим все активные организации
+        Map<String, String> mapSystemCompany = new HashMap<String, String>();
+        mapSystemCompany.put("operation", DATA_OPERATION_READ);
+        mapSystemCompany.put("NAME_TAB", TAB_COMPANY);
+
+        DBHealper db_company = new DBHealper(this, this, "data", null, 1, null, mapSystemCar, null, null, null);
+        cursor_company = db_company.RaedDataCursorList(TAB_COMPANY, "");
+
+        /////////////////////////////////////////////////////////////////////
+        //РАБОТА С ГАЛЛЕРЕЕЙ
+        GridView gridView = (GridView) findViewById(R.id.images_gridview);
+
+        registerForContextMenu(gridView);
+        gridView.setAdapter((ListAdapter) new ImageAdapter(this));
+
+        gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+
+                //открываем выбранное фото
+                Intent intent = new Intent(getApplicationContext(), DetailImageActivity.class);
+                intent.putExtra("position", i);
+
+                String imageUrls = adapterView.getItemAtPosition(i).toString();
+                intent.putExtra("imageUrls", imageUrls);
+
+                startActivity(intent);
+            }
+        });
+
+        gridView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> adapterView, View view, int position, long id) {
+                adapterView.setSelection(position);
+                adapterView.setSelected(true);
+                posPhoto = position;
+                return false;
+            }
+        });
+        //РАБОТА С ГАЛЛЕРЕЕЙ
+        /////////////////////////////////////////////////////////////////////
+
+
+        spReqCar = (Spinner) findViewById(R.id.reqCar);
+
+        final String[] masCars = getMassCars(cursor_cars);
+
+        // адаптер
+        ArrayAdapter<String> spAdapterCar = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, masCars);
+        spAdapterCar.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        spReqCar.setAdapter(spAdapterCar);
+
+        // устанавливаем обработчик нажатия
+        spReqCar.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view,
+                                       int position, long id) {
+                // показываем нажатый элемент
+                nameCar = masCars[position];
+                //Toast.makeText(getBaseContext(), "Position = " + position, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+
+        //заполним спиннер организаций
+        spReqCompany = (Spinner) findViewById(R.id.reqCompany);
+
+        final String[] masCompanies = getMassCompanies(cursor_company);
+
+        // адаптер
+        ArrayAdapter<String> spAdapterCompany = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, masCompanies);
+        spAdapterCompany.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        spReqCompany.setAdapter(spAdapterCompany);
+
+        // устанавливаем обработчик нажатия
+        spReqCompany.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view,
+                                       int position, long id) {
+                // показываем нажатый элемент
+                nameCompany = masCompanies[position];
+                // Toast.makeText(getBaseContext(), "Position = " + position, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+
+        cursor_cars.close();
+        cursor_company.close();
+
+        TextView recNameClient = (TextView) findViewById(R.id.recNameClient);
+        TextView tv_title = (TextView) tb_new_req.findViewById(R.id.toolbar_title_request);
+
+        String location = "";
+        //при открытии старой заявки, получаем данные основной таблицы из курсора
+        if (openOldReq && cursor_req != null) {
+            while (cursor_req.moveToNext()) {
+
+                is_active = cursor_req.getString(cursor_req.getColumnIndex("is_active"));
+
+                number = cursor_req.getString(cursor_req.getColumnIndex("Number"));
+                Date = cursor_req.getString(cursor_req.getColumnIndex("reqDate"));
+                tv_title.setText("Date: " + Date + " Number: " + number);
+
+                nameClient = cursor_req.getString(cursor_req.getColumnIndex("recNameClient"));
+                recNameClient.setText(nameClient);
+
+                location = cursor_req.getString(cursor_req.getColumnIndex("Coordinates"));
+                tv_location.setText(location);
+                latitude = cursor_req.getString(cursor_req.getColumnIndex("latitude"));
+                longitude = cursor_req.getString(cursor_req.getColumnIndex("longitude"));
+
+                nameCar = cursor_req.getString(cursor_req.getColumnIndex("reqNameCar"));
+                int positionCar = spAdapterCar.getPosition(nameCar);
+                spReqCar.setSelection(positionCar);
+
+                nameCompany = cursor_req.getString(cursor_req.getColumnIndex("recNameCompany"));
+                int positionCompany = spAdapterCompany.getPosition(nameCompany);
+                spReqCompany.setSelection(positionCompany);
+
+                id_JSON = cursor_req.getString(cursor_req.getColumnIndex("KEY_NAME"));
+
+                initialData.put("is_active", is_active);
+                initialData.put("_id", cursor_req.getString(cursor_req.getColumnIndex("_id")));
+                initialData.put("recNameClient", nameClient);
+                initialData.put("recNameCompany", nameCompany);
+                initialData.put("reqNameCar", nameCar);
+                //    initialData.put("id_reqClient"   , cursor_req.getString(cursor_req.getColumnIndex("id_reqClient")));
+                initialData.put("id_reqCompany", mapCompanies.get(nameCompany));
+
+                initialData.put("id_reqCar", mapCars.get(nameCar));
+                initialData.put("reqDate", Date);
+                initialData.put("Number", number);
+                initialData.put("Coordinates", location);
+                initialData.put("latitude", latitude);
+                initialData.put("longitude", longitude);
+                initialData.put("id_JSON", id_JSON);
+            }
+            cursor_req.close();
+
+            //при открытии старой заявки, получаем данные таблицы картинок из курсора
+            while (cursorImg.moveToNext()) {
+                try {
+                    String urlStrImg = cursorImg.getString(cursorImg.getColumnIndex("UrlImage"));
+
+
+                    Uri.Builder builder = Uri.parse(urlStrImg).buildUpon();
+
+                    Uri uriImg = builder.build();
+                    // String realPath = getRealPathFromURI(uriImg);
+
+                    masUri.add(uriImg);
+
+                } catch (Exception e) {
+
+                }
+
+            }
+
+            initialData.put("countImages", Integer.toString(masUri.size()));
+
+            ImageAdapter iAdapter = new ImageAdapter(this);
+            iAdapter.setImageUrls(masUri);
+            GridView gv = (GridView) findViewById(R.id.images_gridview);
+
+            gv.setAdapter((ListAdapter) iAdapter);
+            cursorImg.close();
+
+
+        } else {
+            recNameClient.setText(nameClient);
+            MainClass mainClass = new MainClass();
+            mainClass.setBasicContext(this);
+            number = mainClass.CreateNewNumberReq();
+            tv_title.setText("Date: " + Date + " Number: " + number);
+        }
+
+        getSupportActionBar().setSubtitle("Date: " + Date + " Number: " + number);
+
+    }
+
+    private void SaveRequest(String ac) {
+
+        if (spReqCar.getSelectedItem() == null) {
+            Toast.makeText(getApplicationContext(), "не задан автомобиль!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (recNameClient.getText().toString().length() == 0) {
+            Toast.makeText(getApplicationContext(), "не задан клиент!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String id_reqCar = mapCars.get(nameCar);
+        String id_reqCompany = mapCompanies.get(nameCompany);
+        Boolean isInitial = false;
+
+        Map<String, String> mapParamString = new HashMap<String, String>();
+        Map<String, String> mapSystem = new HashMap<String, String>();
+        Map<String, String> mapSystemCHANGES = new HashMap<String, String>();
+        Map<String, String> mapSystemIMG_CHANGES = new HashMap<String, String>();
+        Map<String, String> mapParamStringCHANGES = new HashMap<String, String>();
+        Map<String, ArrayList<String>> mapImage = new HashMap<String, ArrayList<String>>();
+        Map<String, ArrayList<String>> mapImageCHANGES = new HashMap<String, ArrayList<String>>();
+        Map<String, String> mapSystemImg = new HashMap<String, String>();
+
+        //системные данные основной таблицы
+        mapSystem.put("operation", ac);
+        mapSystem.put("NAME_TAB", NAME_TAB);
+        mapSystem.put("thisImage", "0");
+
+        //основная таблица заявки
+        mapParamString.put("recNameClient", nameClient);
+        mapParamString.put("recNameCompany", nameCompany);
+        mapParamString.put("reqNameCar", nameCar);
+        mapParamString.put("id_reqClient", "1");
+        mapParamString.put("id_reqCar", id_reqCar);
+        mapParamString.put("id_reqCompany", id_reqCompany);
+        mapParamString.put("reqDate", Date);
+        mapParamString.put("Number", number);
+        mapParamString.put("Coordinates", tv_location.getText().toString());
+        mapParamString.put("latitude",latitude);
+        mapParamString.put("longitude",longitude);
+        mapParamString.put("is_active", is_active);
+
+        //системные данные таблицы с картинками. Будем записывать только строку url
+        mapSystemImg.put("operation", ac);
+        mapSystemImg.put("NAME_TAB", NAME_TAB_IMG);
+        mapSystemImg.put("MainTab", NAME_TAB);
+
+        //системные данные таблицы изменений
+        mapSystemCHANGES.put("operation", ac);
+        mapSystemCHANGES.put("NAME_TAB", TAB_CHANGES);
+        mapSystemCHANGES.put("thisImage", "0");
+
+        mapParamStringCHANGES.put("MainTab", NAME_TAB);
+        mapParamStringCHANGES.put("idObj", id_req);
+        mapParamStringCHANGES.put("idObjJSON", id_JSON);
+        mapParamStringCHANGES.put("isActive", "1");
+
+        mapSystemIMG_CHANGES.put("operation", ac);
+        mapSystemIMG_CHANGES.put("MainTab", NAME_TAB);
+        mapSystemIMG_CHANGES.put("NAME_TAB", TAB_CHANGES_IMG);
+
+
+        //получим все представления url картинок в виде строки и запишем в аррей лист
+        GridView gv = (GridView) findViewById(R.id.images_gridview);
+        ArrayList<String> listImage = new ArrayList<>();
+        Adapter adapterGV = gv.getAdapter();
+
+        String uriItem = null;
+
+        for (int i = 0; i < masUri.size(); i++) {
+            uriItem = masUri.get(i).toString();
+
+            listImage.add(uriItem);
+        }
+
+        int countImages = listImage.size();
+
+        mapImage.put("listImage", listImage);
+        mapParamString.put("countImages", Integer.toString(countImages));
+
+        mapImageCHANGES.put("listImage", listIMGChanges);
+
+        //передаем данные 2 таблиц - заявки и фото к заявке
+        DBHealper db = new DBHealper(this, this, "data", null, 1, mapParamString, mapSystem, null, mapImage, mapSystemImg);
+
+        //проверим были ли изменения в заявке. Если да, нужно сохранить в таблицу изменений,
+        // которая пойдет обменами в основную базу.
+        MainClass mainClass = new MainClass();
+        isInitial = mainClass.checkInitialObject(mapParamString, initialData);
+
+        DBHealper dbInitial = null;
+
+        if (ac == DATA_OPERATION_SAVE) {
+
+            Long id_req_long = db.AddData();
+            id_req = id_req_long.toString();
+
+            if (id_req_long > 0) {
+
+                dbInitial = new DBHealper(this, this, "data", null, 1, mapParamStringCHANGES, mapSystemCHANGES, null, mapImageCHANGES, mapSystemIMG_CHANGES);
+
+                //  dbInitial.saveDataTabToLog(TAB_CHANGES);
+                Long id_req_long_changes = dbInitial.AddData();
+                String id_req_changes = id_req_long_changes.toString();
+                dbInitial.saveDataTabToLog(TAB_CHANGES);
+
+                Toast.makeText(getApplicationContext(), "request is added!", Toast.LENGTH_SHORT).show();
+
+                //если успешно записана заявка,сохраним картинки
+                try {
+                    countImages = db.AdddataImg(id_req);
+
+                    if (listIMGChanges.size() > 0) {
+                        dbInitial.AdddataImg(id_req);
+                        dbInitial.saveDataTabToLog(TAB_CHANGES_IMG);
+                    }
+
+                    Toast.makeText(getApplicationContext(), "photo request is added!", Toast.LENGTH_SHORT).show();
+                    this.finish();
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "photo request is not saved!", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(getApplicationContext(), "ERROR added data!", Toast.LENGTH_SHORT).show();
+            }
+
+
+        }
+        if (ac == DATA_OPERATION_UPDATE) {
+
+            if (db.updateData(id_req)) {
+                Toast.makeText(getApplicationContext(), "request is saved!", Toast.LENGTH_SHORT).show();
+                try {
+                    countImages = db.updateDataImage(id_req);
+
+                    if (isInitial) {
+
+                        dbInitial = new DBHealper(this, this, "data", null, 1, mapParamStringCHANGES, mapSystemCHANGES, null, mapImageCHANGES, mapSystemIMG_CHANGES);
+
+                        if (dbInitial.updateData(id_JSON)) {
+                            dbInitial.saveDataTabToLog(TAB_CHANGES);
+                            if (listIMGChanges.size() > 0) {
+                                dbInitial.AdddataImg(id_req);
+                                dbInitial.saveDataTabToLog(TAB_CHANGES_IMG);
+                            }
+                        } else {
+                            Long id_req_long_changes = dbInitial.AddData();
+                            String id_req_changes = id_req_long_changes.toString();
+                            dbInitial.saveDataTabToLog(TAB_CHANGES);
+                            if (id_req_long_changes > 0) {
+                                if (listIMGChanges.size() > 0) {
+                                    dbInitial.AdddataImg(id_req);
+                                    dbInitial.saveDataTabToLog(TAB_CHANGES_IMG);
+                                }
+                            }
+                        }
+
+                    }
+
+                    Toast.makeText(getApplicationContext(), "photo of request is added!", Toast.LENGTH_SHORT).show();
+                    this.finish();
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "photo of request is not saved!", Toast.LENGTH_SHORT).show();
+                }
+                this.finish();
+            } else {
+                Toast.makeText(getApplicationContext(), "ERROR saving data!", Toast.LENGTH_SHORT).show();
+            }
+
+        }
+
+
+        Intent returnIntent_req = new Intent();
+        returnIntent_req.putExtra("reqDate", Date);
+        returnIntent_req.putExtra("Number", number);
+        returnIntent_req.putExtra("countImages", String.valueOf(countImages));
+        returnIntent_req.putExtra("is_active", is_active);
+        returnIntent_req.putExtra("_id", id_req);
+        returnIntent_req.putExtra("car", nameCar);
+        // returnIntent_req.putExtra("car", nameCompany);
+        returnIntent_req.putExtra("ac", ac);
+
+        setResult(Activity.RESULT_OK, returnIntent_req);
+        finish();
+
+    }
+
+
+    public String[] getMassCars(Cursor cursor) {
+
+        String[] massCars = new String[cursor.getCount()];
+        String nameCar = "";
+        String id_car;
+
+        if (cursor != null) {
+            int i = 0;
+            while (cursor.moveToNext()) {
+                nameCar = cursor.getString(cursor.getColumnIndex("NameCar"));
+                id_car = Integer.toString(cursor.getInt(cursor.getColumnIndex("_id")));
+                mapCars.put(nameCar, id_car);
+                massCars[i] = nameCar;
+                i++;
+            }
+        }
+
+        return massCars;
+    }
+
+    public String[] getMassCompanies(Cursor cursor) {
+
+        String[] massCompanies = new String[cursor.getCount()];
+        String nameCompany = "";
+        String id_company;
+
+        if (cursor != null) {
+            int i = 0;
+            while (cursor.moveToNext()) {
+                nameCompany = cursor.getString(cursor.getColumnIndex("NameCompany"));
+                id_company = Integer.toString(cursor.getInt(cursor.getColumnIndex("_id")));
+                mapCompanies.put(nameCompany, id_company);
+                massCompanies[i] = nameCompany;
+                i++;
+            }
+        }
+
+        return massCompanies;
+    }
+
+    public void setClient(Cursor cursor) {
+
+        if (cursor != null) {
+
+            while (cursor.moveToNext()) {
+
+                // if (cursor.getString(cursor.getColumnIndex("is_active"))=="1"){
+                nameClient = cursor.getString(cursor.getColumnIndex("FamClient")) + " " +
+                        cursor.getString(cursor.getColumnIndex("NameClient")) + " " +
+                        cursor.getString(cursor.getColumnIndex("PatronymicClient"));
+                id_cl = Integer.toString(cursor.getInt(cursor.getColumnIndex("_id")));
+                // }
+
+            }
+        }
+
+    }
+
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) item.getMenuInfo();
+        switch (item.getItemId()) {
+            case R.id.menu_delete:
+                GridView gView = (GridView) findViewById(R.id.images_gridview);
+                if (gView.isSelected()) {
+                    ImageAdapter iAdapter = new ImageAdapter(this);
+                    masUri.remove(posPhoto);
+                    iAdapter.setImageUrls(masUri);
+                    GridView gridView = (GridView) findViewById(R.id.images_gridview);
+                    gridView.setAdapter((ListAdapter) iAdapter);
+                }
+                gView.setSelected(false);
+                return true;
+            default:
+                return super.onContextItemSelected(item);
+        }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_settings) {
+            return true;
+        } else if (id == android.R.id.home) {
+            finish();
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent imageReturnedIntent) {
+        super.onActivityResult(requestCode, resultCode, imageReturnedIntent);
+
+        switch (requestCode) {
+            case 1:
+                if (resultCode == RESULT_OK) {
+                    try {
+
+                        //объект и отображаем в элементе GridView нашего интерфейса:
+                        final Uri imageUri = imageReturnedIntent.getData();
+
+                        Map<Boolean, String> mapResCopy = copyFile(imageUri);
+                        //скопируем файл в папку приложения и получим его Uri
+                        if (mapResCopy.get(true) != null) {
+                            File newFile = new File(mapResCopy.get(true).toString());
+                            Uri.Builder builder = Uri.parse(String.valueOf(newFile.toURI())).buildUpon();
+                            Uri uriImg = builder.build();
+                            masUri.add(uriImg);
+                            ImageAdapter iAdapter = new ImageAdapter(this);
+                            iAdapter.setImageUrls(masUri);
+                            GridView gridView = (GridView) findViewById(R.id.images_gridview);
+
+                            gridView.setAdapter((ListAdapter) iAdapter);
+
+                            listIMGChanges.add(uriImg.toString());
+
+                        }
+
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    return;
+                }
+            case 2:
+
+                if (imageReturnedIntent == null || imageReturnedIntent.getExtras() == null) {
+                    return;
+                }
+
+                Bitmap bpPhotoCamera = (Bitmap) imageReturnedIntent.getExtras().get("data");
+                try {
+
+                    File imageCamera = savePhotoCamera(this, bpPhotoCamera);
+
+                    if (imageCamera != null) {
+                        Uri.Builder builder = Uri.parse(String.valueOf(imageCamera.toURI())).buildUpon();
+                        Uri uriImg = builder.build();
+                        masUri.add(uriImg);
+                        ImageAdapter iAdapter = new ImageAdapter(this);
+                        iAdapter.setImageUrls(masUri);
+                        GridView gridView = (GridView) findViewById(R.id.images_gridview);
+
+                        gridView.setAdapter((ListAdapter) iAdapter);
+                    }
+
+                } catch (IOException e) {
+                    Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+
+
+                //  masUri.add(imageUri);
+                //  ImageAdapter iAdapter = new ImageAdapter(this);
+                //  iAdapter.setImageUrls(masUri);
+                //  GridView gridView = (GridView) findViewById(R.id.images_gridview);
+
+                //  gridView.setAdapter((ListAdapter) iAdapter);
+                return;
+
+            case 3:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+                        Toast.makeText(getBaseContext(), "Включите разреение GPS для приложения", Toast.LENGTH_SHORT).show();
+                        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_GPS);
+
+                        return;
+                    }
+                }
+                setLocationView(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
+
+        }
+
+    }
+
+    @Override
+    public void onClick(View v) {
+
+        switch (v.getId()) {
+            case R.id.btnAddPhotoReq:
+                // Intent photoPickerIntent = new Intent(Intent.ACTION_PICK);
+                Intent photoPickerIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT, MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+                photoPickerIntent.setType("image/*");
+
+                if (photoPickerIntent.resolveActivity(getPackageManager()) != null) {
+                    startActivityForResult(Intent.createChooser(photoPickerIntent, "Select File"), 1);
+//                startActivityForResult(photoPickerIntent, 1);
+                }
+                return;
+            case R.id.btnAddPfotoCamera:
+
+
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    // разрешение не предоставлено
+                    if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+
+                    } else {
+                        // не требуется показывать объяснение. запрашиваем разрешение
+                        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
+                    }
+                } else {
+                    Intent takePicture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    startActivityForResult(takePicture, 2);
+                }
+                // dispatchTakePictureIntent();
+
+                return;
+
+        }
+    }
+
+    //ПОЛУЧЕНИЕ КООРДИНАТ, ПРОВЕРКА РАЗРЕШЕНИЙ
+    private LocationListener locationListener = new LocationListener() {
+
+        @Override
+        public void onLocationChanged(Location location) {
+            setLocationView(location);
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+
+        }
+
+
+        @RequiresApi(api = Build.VERSION_CODES.M)
+        @Override
+        public void onProviderEnabled(String provider) {
+
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getBaseContext(), "Включите разреение GPS для приложения", Toast.LENGTH_SHORT).show();
+                //        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_GPS);
+
+                //       Toast.makeText(getBaseContext(), "Включите разрешение интернет для приложения", Toast.LENGTH_SHORT).show();
+                //       ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, MY_PERMISSIONS_REQUEST_NETWORK);
+                //return;
+            }
+            setLocationView(locationManager.getLastKnownLocation(provider));
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+            startActivity(new Intent(
+                    Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        }
+
+
+    };
+
+    private void setLocationView(Location location) {
+        if (location == null){
+            return;
+        }else
+         {
+            tv_location = findViewById(R.id.tv_location);
+            tv_location.setText(formatLocation(location));
+            latitude = Double.toString(location.getLatitude());
+            longitude = Double.toString(location.getLongitude());
+        }
+    }
+
+    private String formatLocation(Location location) {
+
+        return String.format(
+                "Coordinates: lat = %1$.4f, lon = %2$.4f, time = %3$tF %3$tT",
+                location.getLatitude(), location.getLongitude(), new Date(
+                        location.getTime()));
+    }
+
+
+    // вызывается после ответа пользователя на запрос разрешения
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_CAMERA: {
+                // если пользователь закрыл запрос на разрешение, не дав ответа, массив grantResults будет пустым
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Intent takePicture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    startActivityForResult(takePicture, 2);
+                } else {
+                    // разрешение не было предоставлено
+                    // выполните здесь необходимые операции для выключения функциональности приложения, связанной с запрашиваемым разрешением
+                }
+
+                return;
+            }
+        }
+    }
+
+
+    public Map<Boolean,String> copyFile(Uri imageUri) throws FileNotFoundException {
+
+        Map<Boolean,String> mapResult = new HashMap<Boolean, String>();
+
+        File inputFile=new File(imageUri.getPath()).getAbsoluteFile();
+
+        InputStream in = getContentResolver().openInputStream(imageUri);
+
+        String inputAbsolutePath = inputFile.getAbsolutePath();
+        //String inputAbsolutePath = "photoReq";
+
+        File dirInternal = new File(this.getFilesDir(),inputAbsolutePath);
+        //     File sdCard = Environment.getStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        File dirOutput = new File(dirInternal.getParent() + "/photoReq");
+        if (!dirOutput.exists()){
+            dirOutput.mkdirs();
+        }
+
+        String outputPath = dirOutput.getPath()+"/" + inputFile.getName()+".jpg";
+        //  InputStream in = null;
+        OutputStream out = null;
+        boolean sucsessfull = false;
+        try {
+
+            //    in = new FileInputStream(realPathInput + ".jpg");
+            out = new FileOutputStream(outputPath);
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read); }
+            in.close();
+            in = null;
+            // write the output file (You have now copied the file)
+            if (out!=null){
+                sucsessfull=true;
+            }
+            out.flush();
+            out.close();
+            out = null; }
+        catch (FileNotFoundException fnfe1)
+        {
+            Toast.makeText(getBaseContext(), fnfe1.getMessage(), Toast.LENGTH_SHORT).show();
+            //LO.e("tag", fnfe1.getMessage());
+        } catch (Exception e) {
+            Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+
+        mapResult.put(sucsessfull,outputPath);
+        return mapResult;
+    }
+
+
+    public static File savePhotoCamera(Context context, Bitmap bp) throws IOException {
+
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+
+        File dirInternal = new File(context.getFilesDir()+"/photoReq","");
+
+        if (!dirInternal.exists()){
+            dirInternal.mkdirs();
+        }
+
+        File image = new File(dirInternal + "/"+imageFileName +".jpg");
+
+        try {
+            FileOutputStream fos = null;
+            try {
+                fos = new FileOutputStream(image);
+                bp.compress(Bitmap.CompressFormat.JPEG, 50, fos);
+            } finally {
+                if (fos != null) fos.close();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+
+      //  File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+      //  File dir = new File(storageDir.getAbsolutePath() + "/IncuransePicture");
+       // File image =  File.createTempFile(imageFileName, ".jpg", dir);
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(MediaStore.MediaColumns.DATA, image.getAbsolutePath());
+
+        context.getContentResolver().insert(MediaStore.Images.Media.INTERNAL_CONTENT_URI, values);
+
+        return image;
+    }
+
+
+}

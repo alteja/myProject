@@ -1,0 +1,1186 @@
+package com.gmail.incuranse_dn.ui.main;
+
+import android.content.ContentResolver;
+import android.content.Context;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.util.Base64;
+import android.widget.Toast;
+
+
+import androidx.annotation.RequiresPermission;
+
+import com.gmail.incuranse_dn.ui.Exchange.JSONPlaceHolderApi;
+import com.gmail.incuranse_dn.ui.Exchange.JsonParser;
+
+import com.gmail.incuranse_dn.ui.Exchange.MyCallBackPhoto;
+import com.gmail.incuranse_dn.ui.Exchange.MyCallbackMap;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Companies.listCompanies;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Companies.pojoCompany;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.listCustomerEMail;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.listCustomers;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.listCustomersPhone;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerEMail;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerPhone;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomers;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_ManufacturesCars.CarManufacturePojo;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_ManufacturesCars.listManufacturers;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_cars.carPojo;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_cars.listCars;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_carsModels.carModelPojo;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_carsModels.listModels;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_requests.listRequests;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_requests.listRequestsPhoto;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_requests.pojoReqPhoto;
+import com.gmail.incuranse_dn.ui.Pojo.pojo_requests.pojoRequest;
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.google.gson.stream.JsonWriter;
+
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
+import java.io.Writer;
+import java.net.URLDecoder;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+
+import okhttp3.internal.http2.Hpack;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+import static java.lang.Integer.parseInt;
+
+public class Exchange extends AsyncTask<String,String,String>{
+
+    Context contextEx;
+    ContentResolver cr;
+
+    final protected String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    final protected String DATA_OPERATION_READ = "DATA_OPERATION_READ";
+    final protected String DATA_OPERATION_UPDATE = "DATA_OPERATION_UPDATE";
+
+    //1-й параметр idJSON, 2-й параметр id Android
+    //Map<String, String> mapAlldataTab = new HashMap<String, String>();
+
+    Map<String, String> mapAllModelsCar = new HashMap<String, String>();
+    Map<String, String> mapAllManufacturersCar = new HashMap<String, String>();
+    Boolean successfulAutorisation = false;
+
+
+    public void StartExchange(final String idCustomer, String numberPhone) throws IOException  {
+
+        final MyCallbackMap callbackCompanies = new MyCallbackMap() {
+
+            @Override
+            public void success(List<Map<String, String>> result) {
+                //типы данных cистемной таблицы
+                String NAME_TAB = "TAB_COMPANY";
+                Map<String, String> mapSystem = new HashMap<String, String>();
+                mapSystem.put("NAME_TAB", NAME_TAB);
+
+                Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+                SaveExObjects(result, mapSystem,mapAlldataTab);
+            }
+
+            @Override
+            public void failure(Throwable t) {
+                Toast.makeText(contextEx, "Данные по компаниям не загружены.Обмен остановлен.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        };
+
+        getListCompanies(idCustomer,callbackCompanies);
+
+
+        getListModels();
+        getListManufacturedCars();
+
+        getListPhonesCustomers(idCustomer);
+        getListEMailsCustomers(idCustomer);
+
+        final MyCallbackMap callbackCustomer = new MyCallbackMap() {
+
+            @Override
+            public void success(List<Map<String, String>> result) {
+                //типы данных cистемной таблицы
+                String NAME_TAB = "TAB_CLIENTS";
+
+                Map<String, String> mapSystem = new HashMap<String, String>();
+                mapSystem.put("NAME_TAB", NAME_TAB);
+
+                Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+                SaveExObjects(result, mapSystem,mapAlldataTab);
+            }
+
+            @Override
+            public void failure(Throwable t) {
+                Toast.makeText(contextEx, "Данные по клиентам не загружены.Обмен остановлен.", Toast.LENGTH_SHORT).show();
+                return;
+
+            }
+        };
+        getListCustomers(idCustomer,callbackCustomer);
+
+        final MyCallbackMap callbackCars = new MyCallbackMap() {
+
+            @Override
+            public void success(List<Map<String, String>> result) {
+                //типы данных cистемной таблицы
+                String NAME_TAB = "TAB_CARS";
+
+                Map<String, String> mapSystem = new HashMap<String, String>();
+                mapSystem.put("NAME_TAB", NAME_TAB);
+
+                Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+                SaveExObjects(result, mapSystem,mapAlldataTab);
+            }
+
+            @Override
+            public void failure(Throwable t) {
+                Toast.makeText(contextEx, "Данные по автомобилям не загружены.Обмен остановлен.", Toast.LENGTH_SHORT).show();
+                return;
+
+            }
+        };
+        getListCars(idCustomer,callbackCars);
+
+        final MyCallBackPhoto callbackReqPhoto = new MyCallBackPhoto() {
+
+            @Override
+            public void success(Map<String, Map<String, Uri>> result) {
+                getListRequests(idCustomer, result);
+            }
+
+            @Override
+            public void failure(Throwable t) {
+                Toast.makeText(contextEx, "Данные по заявкам на ДТП не загружены.Обмен остановлен.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        };
+
+        Map<String,Map<String,Uri>> mapPhotoReq = getListRequestsPicture(idCustomer,callbackReqPhoto);
+
+        //getUnloadingRequests();
+
+
+    }
+
+    private Map<String, Map<String, Uri>> getListRequestsPicture(String idCustomer, final MyCallBackPhoto callback) {
+
+        final Map<String, Map<String,Uri>> mapImage = new HashMap<String, Map<String,Uri>>();
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listRequestsPhoto> call = apiEx.getJSONlistRequestsPicture(idCustomer);
+        call.enqueue(new Callback<listRequestsPhoto>() {
+
+            @Override
+            public void onResponse(Call<listRequestsPhoto> call, Response<listRequestsPhoto> response) {
+
+                if (response.isSuccessful()) {
+
+                    MainClass mc = new MainClass();
+
+                    mc.setBasicContext(contextEx);
+                    mc.setCr(cr);
+
+                    List masReqPhoto = response.body().getListRequestsPhoto();
+
+                    String id_ReqJSON = "";
+                    String id_ReqJSONNext = "";
+
+                    //Map<String,Uri> dataPhoto = new HashMap<String,Uri>();
+
+                    for (int i = 0; i < masReqPhoto.size(); i++) {
+
+                        pojoReqPhoto pojoReqPhoto = (com.gmail.incuranse_dn.ui.Pojo.pojo_requests.pojoReqPhoto) masReqPhoto.get(i);
+
+                        if (i==0) {
+                            id_ReqJSON = pojoReqPhoto.getIdRequest();
+                            id_ReqJSONNext = id_ReqJSON;
+                        }else{
+                            id_ReqJSONNext = pojoReqPhoto.getIdRequest();
+                        }
+
+                        String Img = pojoReqPhoto.getPhoto();
+                        String idPhotoJson = pojoReqPhoto.getURL();
+
+                        Bitmap bImg = getBitmapfromBase64(Img);
+                        Uri uriImg = mc.saveBitmapExchange(bImg);
+
+                        if (uriImg!=null){
+
+                            Map<String,Uri> dataPhoto = new HashMap<String,Uri>();
+
+                            if (mapImage.get(id_ReqJSONNext)==null){
+                               dataPhoto.put(idPhotoJson,uriImg);
+                               id_ReqJSON = id_ReqJSONNext;
+                               mapImage.put(id_ReqJSON, dataPhoto);
+                            }else{
+                               dataPhoto = mapImage.get(id_ReqJSONNext);
+                               dataPhoto.put(idPhotoJson,uriImg);
+                               mapImage.remove(id_ReqJSONNext);
+                               mapImage.put(id_ReqJSONNext,dataPhoto);
+                            }
+
+                        }
+
+                    }
+
+                  //  if (mapImage.size()==0){
+                  //      callback.failure(new Throwable());
+                  //  }else {
+                        callback.success(mapImage);
+                 //   }
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listRequestsPhoto> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+           }
+        });
+
+       return mapImage;
+    }
+
+    public void PostListRequests() throws IOException {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+
+        listRequests listReq = createPostDataRequests();
+
+        Call<listRequests> call = apiEx.PostRequestsAndroid(listReq);
+
+        call.enqueue(new Callback<listRequests>() {
+
+            @Override
+            public void onResponse(Call<listRequests> call, Response<listRequests> response) {
+
+                if (response.isSuccessful()) {
+
+                    Map<String,String> mapSystem = new HashMap<String,String>();
+                    mapSystem.put("NAME_TAB", "CHANGES_TAB");
+
+                    DBHealper dbDeleteAllChanses = new DBHealper(this, contextEx,"data", null, 1, mapSystem);
+
+                    if (dbDeleteAllChanses.deleteData("CHANGES_TAB")){
+                        dbDeleteAllChanses.saveDataTabToLog("CHANGES_TAB");
+                        Toast.makeText(contextEx, "unload completed successfully", Toast.LENGTH_SHORT).show();
+                    }
+
+                    Map<String,String> mapSystemImg = new HashMap<String,String>();
+                    mapSystem.put("NAME_TAB", "CHANGES_TAB_IMAGES");
+
+                    DBHealper dbDeleteAllChansesImg = new DBHealper(this, contextEx,"data", null, 1, mapSystemImg);
+
+                    if (dbDeleteAllChansesImg.deleteData("CHANGES_TAB_IMAGES")){
+                        dbDeleteAllChansesImg.saveDataTabToLog("CHANGES_TAB_IMAGES");
+                        Toast.makeText(contextEx, "unload completed successfully", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listRequests> call, Throwable t) {
+                Boolean ok = false;
+            }
+        });
+
+    }
+
+    public listRequests createPostDataRequests() throws FileNotFoundException {
+
+        DBHealper db = new DBHealper(this, contextEx, "data", null, 1, null, null, null);
+
+        listRequests listReqHeadline = new listRequests();
+        listReqHeadline.setCreateDate(new SimpleDateFormat("yyyy/M/dd hh:mm:ss").format(Calendar.getInstance().getTime()));
+        listReqHeadline.setResponseStatus("ok");
+        listReqHeadline.setServiceName("AccidentStatementsAndroid");
+        String idClientJSON = db.getCustomerIdJson();
+        db.saveDataTabToLog("CHANGES_TAB");
+
+        List<Map<String,String>> listReqDB = db.getChansesRequests();
+
+        List<pojoRequest> listReq = new ArrayList<pojoRequest>();
+        List<pojoReqPhoto>listReqPhoto = new ArrayList<pojoReqPhoto>();
+
+        Map<String, List<String>> mapDataImg = db.getChansesImgRequests();
+
+        String idReqAndroid = "";
+
+        for (int i = 0; i<listReqDB.size(); i++){
+
+            Map<String,String> mapReq = listReqDB.get(i);
+
+            pojoRequest req = new pojoRequest();
+
+            req.setId(mapReq.get("id"));
+            req.setIsActive(mapReq.get("isActive"));
+            req.setToDelete(false);
+            req.setCustomerId(mapReq.get("customerId"));
+            req.setCustomerName(mapReq.get("customerName"));
+            req.setCarId(mapReq.get("carId"));
+            req.setCarName(mapReq.get("carName"));
+            req.setCompanyId(mapReq.get("CompanyId"));
+            req.setCompanyName(mapReq.get("CompanyName"));
+            req.setLatitude("");
+            req.setLongitude("");
+            req.setDateCreated(mapReq.get("dateCreated"));
+            req.setCountImages(mapReq.get("countImages"));
+
+            idReqAndroid = mapReq.get("idReqAndroid");
+            List<String> listPhoto = mapDataImg.get(idReqAndroid);
+
+            if (listPhoto==null) {
+            }else{
+                for (int j = 0; j < listPhoto.size(); j++) {
+
+                    pojoReqPhoto reqPhoto = new pojoReqPhoto();
+
+                    String stringUri = listPhoto.get(j);
+                    Uri.Builder builder = Uri.parse(stringUri).buildUpon();
+                    Uri uriImg = builder.build();
+                    final InputStream imageStream = contextEx.getContentResolver().openInputStream(uriImg);
+                    final Bitmap selectedImage = BitmapFactory.decodeStream(imageStream);
+                    String encodedImage = encodeImageForBase64(selectedImage);
+                    reqPhoto.setPhoto(encodedImage);
+
+                    listReqPhoto.add(reqPhoto);
+
+                }
+                req.setListReqPhoto(listReqPhoto);
+            }
+            listReq.add(req);
+            }
+
+       listReqHeadline.setListRequests(listReq);
+
+        return listReqHeadline;
+    }
+
+    private void getListCompanies(String idCustomer, final MyCallbackMap callback) {
+
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listCompanies> call = apiEx.getJSONlistCompanies(idCustomer);
+        call.enqueue(new Callback<listCompanies>() {
+
+
+            @Override
+            public void onResponse(Call<listCompanies> call, Response<listCompanies> response) {
+                if (response.isSuccessful()) {
+
+                    String date = response.body().getCreateDate();
+                    String serviceName = response.body().getServiceName();
+                    String responseStatus = response.body().getResponseStatus();
+
+                    List masCompanies = response.body().getListCompanies();
+
+                    String id_JSON = "";
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+
+                    for (int i = 0; i < masCompanies.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        pojoCompany CompanyPojo = (com.gmail.incuranse_dn.ui.Pojo.pojo_Companies.pojoCompany) masCompanies.get(i);
+
+                        //добавляем в базу только активные записи
+                        String isActive = CompanyPojo.isActive();
+
+                        if (isActive.equals("1")) {
+                            id_JSON = CompanyPojo.getId();
+
+                            mapParamString.put("NameCompany", CompanyPojo.getNameCompany());
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            if (CompanyPojo.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    if (listData.size()==0){
+                        callback.failure(new Throwable());
+                    }else {
+                        callback.success(listData);
+                    }
+
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+
+            }
+
+            @Override
+            public void onFailure(Call<listCompanies> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+
+    }
+
+    private void getListManufacturedCars() {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listManufacturers> call = apiEx.getJSONlistManufacturers();
+        call.enqueue(new Callback<listManufacturers>() {
+
+
+            @Override
+            public void onResponse(Call<listManufacturers> call, Response<listManufacturers> response) {
+
+                if (response.isSuccessful()) {
+
+                    String date = response.body().getCreateDate();
+                    String serviceName = response.body().getServiceName();
+                    String responseStatus = response.body().getResponseStatus();
+                    List masCarsManufacturers = response.body().getListManufacturers();
+
+                    String NAME_TAB = "TAB_MARK_CAR";
+                    String id_JSON = "";
+
+                    //типы данных cистемной таблицы
+                    Map<String, String> mapSystem = new HashMap<String, String>();
+                    mapSystem.put("NAME_TAB", NAME_TAB);
+
+                    Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+
+                    for (int i = 0; i < masCarsManufacturers.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        CarManufacturePojo carManufacturePojo = (com.gmail.incuranse_dn.ui.Pojo.pojo_ManufacturesCars.CarManufacturePojo) masCarsManufacturers.get(i);
+
+                        //добавляем в базу только активные записи
+                        String isActive = carManufacturePojo.isActive();
+
+                        if (isActive.equals("1")) {
+                            id_JSON = carManufacturePojo.getId();
+
+                            mapParamString.put("NameMarkCar", carManufacturePojo.getName());
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            if (carManufacturePojo.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    SaveExObjects(listData, mapSystem,mapAlldataTab);
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listManufacturers> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+
+        });
+
+    }
+
+    private void getListModels() {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listModels> call = apiEx.getJSONCarsModels();
+        call.enqueue(new Callback<listModels>() {
+
+
+            @Override
+            public void onResponse(Call<listModels> call, Response<listModels> response) {
+
+                if (response.isSuccessful()) {
+
+
+                    Map<String, String> mapParamStringCarsModels = new HashMap<String, String>();
+
+                    String date = response.body().getCreateDate();
+                    String serviceName = response.body().getServiceName();
+                    String responseStatus = response.body().getResponseStatus();
+                    List masCarsModels = response.body().getListCarsModels();
+
+                    String NAME_TAB = "TAB_MODEL_CAR";
+                    String id_JSON = "";
+
+                    Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+
+                    //типы данных cистемной таблицы
+                    Map<String, String> mapSystem = new HashMap<String, String>();
+                    mapSystem.put("NAME_TAB", NAME_TAB);
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+
+                    for (int i = 0; i < masCarsModels.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        carModelPojo carModelPojo = (com.gmail.incuranse_dn.ui.Pojo.pojo_carsModels.carModelPojo) masCarsModels.get(i);
+
+                        //добавляем в базу только активные записи
+                        String isActive = carModelPojo.isActive();
+
+                        if (isActive.equals("1")) {
+                            id_JSON = carModelPojo.getId();
+
+                            mapParamString.put("NameModelCar", carModelPojo.getName());
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            if (carModelPojo.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    SaveExObjects(listData, mapSystem,mapAlldataTab);
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listModels> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+
+        });
+    }
+
+    private void getListCars(String idCustomer,final MyCallbackMap callback) {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listCars> call = apiEx.getJSONlistCars(idCustomer);
+        call.enqueue(new Callback<listCars>() {
+
+            Map<String, String> mapAllMarks = getAllModelsManufacturersCar("TAB_MARK_CAR");
+            Map<String, String> mapAllModels = getAllModelsManufacturersCar("TAB_MODEL_CAR");
+
+            @Override
+            public void onResponse(Call<listCars> call, Response<listCars> response) {
+                if (response.isSuccessful()) {
+
+                    List masCars = response.body().getListCars();
+
+                    String id_JSON = "";
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+
+                    String idJSONManufacturer = "";
+                    String idJSONModel = "";
+                    String idAndroidManufacturer = "";
+                    String idAndroidModel = "";
+
+                    for (int i = 0; i < masCars.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        carPojo carPojo = (com.gmail.incuranse_dn.ui.Pojo.pojo_cars.carPojo) masCars.get(i);
+
+                        id_JSON = carPojo.getCarId();
+
+                        //добавляем в базу только активные записи
+                        String isActive = carPojo.isActive();
+
+                        if (isActive.equals("1")) {
+
+                            mapParamString.put("NameCar", carPojo.getName());
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            idJSONManufacturer = carPojo.getManufacturerId();
+                            idJSONModel = carPojo.getModelId();
+                            idAndroidManufacturer = mapAllMarks.get(idJSONManufacturer);
+                            idAndroidModel = mapAllModels.get(idJSONModel);
+
+                            String nameMarka = carPojo.getMarkaCar();
+                            String nameModel = carPojo.getModelCar();
+
+                            mapParamString.put("id_MarkaCar", idAndroidManufacturer);
+                            mapParamString.put("id_ModelCar", idAndroidModel);
+                            mapParamString.put("NameCar", nameMarka + " " + nameModel);
+                            mapParamString.put("MarkaCar", nameMarka);
+                            mapParamString.put("ModelCar", nameModel);
+                            mapParamString.put("VIN", carPojo.getVIN());
+                            mapParamString.put("MeleageCar", carPojo.getMeleageCar());
+                            mapParamString.put("CountryNumber", carPojo.getCountryNumber());
+                            mapParamString.put("KPPCar", carPojo.getKPPCar());
+                            mapParamString.put("YearCreateCar", carPojo.getYearCreateCar());
+
+                            if (carPojo.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    if (listData.size()==0){
+                        callback.failure(new Throwable());
+                    }else {
+                        callback.success(listData);
+                    }
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listCars> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+
+
+        });
+    }
+
+    private void getListCustomers(String idCustomer,final MyCallbackMap callback) {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listCustomers> call = apiEx.getJSONlistClients(idCustomer);
+        call.enqueue(new Callback<listCustomers>() {
+            @Override
+            public void onResponse(Call<listCustomers> call, Response<listCustomers> response) {
+
+                if (response.isSuccessful()) {
+
+                    List masCustomers = response.body().getListCustomers();
+
+                    String id_JSON = "";
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+
+                    for (int i = 0; i < masCustomers.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        pojoCustomers pojoCustomer = (com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomers) masCustomers.get(i);
+
+                        id_JSON = pojoCustomer.getId();
+                        String isActive = pojoCustomer.isActive();
+
+                        //добавляем в базу только активные записи
+                        if (isActive.equals("1")) {
+
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            mapParamString.put("NameClient", pojoCustomer.getNameClient());
+                            mapParamString.put("FamClient", pojoCustomer.getFamClient());
+                            mapParamString.put("PatronymicClient", pojoCustomer.getPatronymicClient());
+                            mapParamString.put("INNClient", pojoCustomer.getINNClient());
+
+                            String dateBirth = pojoCustomer.getDateBirthClient();
+                            if (dateBirth.equals("01.01.0001 00:00:00")) {
+                                mapParamString.put("DateBirthClient", "");
+                            } else {
+                                mapParamString.put("DateBirthClient", new SimpleDateFormat("yyyy/M/dd hh:mm:ss").format(dateBirth));
+                            }
+
+                            if (pojoCustomer.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    if (listData.size()==0){
+                        callback.failure(new Throwable());
+                    }else {
+                        callback.success(listData);
+                    }
+
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listCustomers> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void getListRequests(String idCustomer,final Map<String,Map<String,Uri>> mapPhotoReq) {
+
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listRequests> call = apiEx.getJSONlistRequests(idCustomer);
+        call.enqueue(new Callback<listRequests>() {
+
+            @Override
+            public void onResponse(Call<listRequests> call, Response<listRequests> response) {
+
+                if (response.isSuccessful()) {
+
+                    MainClass mc = new MainClass();
+
+                    mc.setBasicContext(contextEx);
+                    mc.setCr(cr);
+
+                    List masReq = response.body().getListRequests();
+
+                    String NAME_TAB = "TAB_REQUESTS";
+                    String NAME_TAB_IMG = "TAB_IMAGES";
+
+                    String id_JSON = "";
+
+                    Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+
+                    //типы данных cистемной таблицы
+                    Map<String, String> mapSystem = new HashMap<String, String>();
+                    mapSystem.put("NAME_TAB", NAME_TAB);
+
+                    Map<String, String> mapSystemImg = new HashMap<String, String>();
+                    //системные данные таблицы с картинками. Будем записывать только строку url
+                    mapSystemImg.put("operation", "");
+                    mapSystemImg.put("NAME_TAB" , "TAB_IMAGES");
+                    mapSystemImg.put("MainTab" , NAME_TAB_IMG);
+
+                    Map<String,String> mapAlldataTabPhoto = getMapAllDataTab(NAME_TAB_IMG);
+                    Map<String,String> mapAllDataTabCars = getMapAllDataTab("TAB_CARS");
+                    Map<String,String> mapAllDataTabCompanies = getMapAllDataTab("TAB_COMPANY");
+                    Map<String,String> mapAllDataTabClients = getMapAllDataTab("TAB_CLIENTS");
+
+                    for (int i = 0; i < masReq.size(); i++) {
+
+                        ArrayList<String> listImage = new ArrayList<>();
+
+                        int countImage = 0;
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+                        Map<String, ArrayList<String>> mapImage = new HashMap<String, ArrayList<String>>();
+
+                        pojoRequest pojoReq = (com.gmail.incuranse_dn.ui.Pojo.pojo_requests.pojoRequest) masReq.get(i);
+
+                        String isActive = pojoReq.isActive();
+
+                        if (isActive.equals("1")) {
+
+                            id_JSON = pojoReq.getId();
+
+                            Map<String,Uri> mapUriReq = mapPhotoReq.get(id_JSON);
+
+                            if (mapUriReq!=null) {
+                                countImage = mapUriReq.size();
+
+                                for (Map.Entry<String, Uri> entry : mapUriReq.entrySet()) {
+                                    if (entry.getValue() != null) {
+
+                                        if (mapAlldataTabPhoto.get(entry.getKey()) == null)
+                                            listImage.add(entry.getValue().toString());
+                                    }
+                                }
+                            }
+                            mapImage.put("listImage", listImage);
+                            MainClass mainClass = new MainClass();
+                            mainClass.setBasicContext(contextEx);
+
+                            String numberNewReq = mainClass.CreateNewNumberReq();
+                            String coordinates = getformatLocation(pojoReq.getLatitude(), pojoReq.getLongitude());
+
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            mapParamString.put("recNameClient", pojoReq.getCustomerName());
+                            mapParamString.put("recNameCompany", pojoReq.getCompanyName());
+                            mapParamString.put("reqNameCar", pojoReq.getCarName());
+
+                            String idClient = mapAllDataTabClients.get(pojoReq.getCustomerId());
+                            mapParamString.put("id_reqClient", idClient);
+
+                            String idCompany = mapAllDataTabCompanies.get(pojoReq.getCompanyId());
+                            mapParamString.put("id_reqCompany", idCompany);
+
+                            String idCar = mapAllDataTabCars.get(pojoReq.getCarId());
+                            mapParamString.put("id_reqCar", idCar);
+
+                            mapParamString.put("reqDate", pojoReq.getDateCreated());
+                            mapParamString.put("Number", numberNewReq);
+
+                            mapParamString.put("latitude", pojoReq.getLatitude());
+                            mapParamString.put("longitude", pojoReq.getLongitude());
+                            mapParamString.put("Coordinates",coordinates);
+                            mapParamString.put("countImages", Integer.toString(countImage));
+
+                            if (pojoReq.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                DBHealper dbAdd = new DBHealper(Exchange.this, contextEx, "data", null, 1, mapParamString, mapSystem, null,mapImage,mapSystemImg);
+                                String idAndroid;
+                                if (mapAlldataTab.containsKey(id_JSON)) {
+
+                                    idAndroid = mapAlldataTab.get(id_JSON);
+
+                                    if (dbAdd.updateData(idAndroid)) {
+                                        if (dbAdd.updateDataImage(idAndroid)>0) {
+                                            Toast.makeText(contextEx, "успешная загрузка данных!", Toast.LENGTH_SHORT).show();
+                                        }
+                                    }
+                                } else {
+
+                                    Long id_req_long = dbAdd.AddData();
+                                    idAndroid = id_req_long.toString();
+
+                                    if (id_req_long > 0) {
+                                        if (dbAdd.AdddataImg(idAndroid) > 0) {
+                                            Toast.makeText(contextEx, "успешная загрузка данных!", Toast.LENGTH_SHORT).show();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listRequests> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void getListPhonesCustomers(String idCustomer) {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listCustomersPhone> call = apiEx.getJSONСCustomerPhones(idCustomer);
+        call.enqueue(new Callback<listCustomersPhone>() {
+
+            @Override
+            public void onResponse(Call<listCustomersPhone> call, Response<listCustomersPhone> response) {
+                if (response.isSuccessful()) {
+
+                    List masCustomersPhones = response.body().getListCustomerPhones();
+
+                    String id_JSON = "";
+                    String NAME_TAB = "TAB_CONTACTS_CLIENTS";
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+                    Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+
+                    Map<String,String> mapSystem = new HashMap<String,String>();
+                    mapSystem.put("NAME_TAB", NAME_TAB);
+
+                    for (int i = 0; i < masCustomersPhones.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        pojoCustomerPhone pojoCustomerPhone = (com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerPhone) masCustomersPhones.get(i);
+
+                        id_JSON = pojoCustomerPhone.getId();
+                        String isActive = pojoCustomerPhone.isActive();
+
+                        //добавляем в базу только активные записи
+                        if (isActive.equals("1")) {
+
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            String typePhone = "";
+
+                            if (pojoCustomerPhone.getMainPhone()){
+                               typePhone = "Основной";
+                            }else{
+                               typePhone = "Мобильный";
+                            }
+
+                            mapParamString.put("type_contact", "PHONE");
+                            mapParamString.put("view_contact", typePhone);
+                            mapParamString.put("contact", pojoCustomerPhone.getPhoneNumber());
+
+                            if (pojoCustomerPhone.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    SaveExObjects(listData, mapSystem,mapAlldataTab);
+
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listCustomersPhone> call, Throwable t) {
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void getListEMailsCustomers(String idCustomer) {
+
+        JSONPlaceHolderApi apiEx = JsonParser.getApiService();
+        Call<listCustomerEMail> call = apiEx.getJSONСCustomerEMailes(idCustomer);
+        call.enqueue(new Callback<listCustomerEMail>() {
+
+
+            @Override
+            public void onResponse(Call<listCustomerEMail> call, Response<listCustomerEMail> response) {
+                if (response.isSuccessful()) {
+
+                    List masCustomersEMailes = response.body().getListCustomerEMails();
+
+                    String id_JSON = "";
+                    String NAME_TAB = "TAB_CONTACTS_CLIENTS";
+
+                    List<Map<String, String>> listData = new ArrayList<Map<String, String>>();
+                    Map<String,String> mapAlldataTab = getMapAllDataTab(NAME_TAB);
+
+                    Map<String,String> mapSystem = new HashMap<String,String>();
+                    mapSystem.put("NAME_TAB", NAME_TAB);
+
+                    for (int i = 0; i < masCustomersEMailes.size(); i++) {
+
+                        Map<String, String> mapParamString = new HashMap<String, String>();
+
+                        pojoCustomerEMail pojoCustomerEMail = (com.gmail.incuranse_dn.ui.Pojo.pojo_Customers.pojoCustomerEMail) masCustomersEMailes.get(i);
+
+                        id_JSON = pojoCustomerEMail.getId();
+                        String isActive = pojoCustomerEMail.getIsActive();
+
+                        //добавляем в базу только активные записи
+                        if (isActive.equals("1")) {
+
+                            mapParamString.put("KEY_NAME", id_JSON);
+                            mapParamString.put("is_active", isActive);
+
+                            String typeMail = "";
+
+                            if (pojoCustomerEMail.getMainEmail()){
+                                typeMail = "Основной";
+                            }else{
+                                typeMail = "Другой";
+                            }
+
+                            mapParamString.put("type_contact", "EMAIL");
+                            mapParamString.put("view_contact", typeMail);
+                            mapParamString.put("contact", pojoCustomerEMail.geteMail());
+
+                            if (pojoCustomerEMail.isToDelete()) {
+                                deleteExObject(mapParamString);
+                            } else {
+                                listData.add(mapParamString);
+                            }
+                        }
+                    }
+
+                    SaveExObjects(listData, mapSystem,mapAlldataTab);
+
+
+                } else {
+
+                    Toast.makeText(contextEx, response.body().toString(), Toast.LENGTH_SHORT).show();
+                    //Log("LOG",response " + response.body().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<listCustomerEMail> call, Throwable t) {
+
+                Toast.makeText(contextEx, "server not connection!", Toast.LENGTH_SHORT).show();
+
+            }
+        });
+    }
+
+    public Map<String, String> getMapAllDataTab(String NAME_TAB) {
+
+        Map<String,String> mapAlldataTab = new HashMap<String,String>();
+
+
+        //получим основную таблицу
+        DBHealper db = new DBHealper(this, contextEx, "data", null, 1, null, null, null);
+
+        Cursor cursor = db.RaedDataCursorList(NAME_TAB, "1");
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                mapAlldataTab.put(cursor.getString(cursor.getColumnIndex("KEY_NAME")),
+                        cursor.getString(cursor.getColumnIndex("_id")));
+            }
+        }
+
+        return mapAlldataTab;
+    }
+
+    public Map<String, String> getAllModelsManufacturersCar(String NAME_TAB) {
+
+
+        //получим основную таблицу
+        DBHealper db = new DBHealper(this, contextEx, "data", null, 1, null, null, null);
+
+        Cursor cursor = db.RaedDataCursorList(NAME_TAB, "1");
+
+        String idJSON = "";
+        String idAndroid = "";
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                idJSON = cursor.getString(cursor.getColumnIndex("KEY_NAME"));
+                idAndroid = cursor.getString(cursor.getColumnIndex("_id"));
+                mapAllManufacturersCar.put(idJSON, idAndroid);
+            }
+        }
+
+        return mapAllManufacturersCar;
+
+    }
+
+    public void SaveExObjects(List<Map<String, String>> listData, Map<String, String> mapSystem, Map<String,String> mapAlldataTab) {
+
+        List<Map<String, String>> listUpdate = new ArrayList<Map<String, String>>();
+        List<Map<String, String>> listAdd = new ArrayList<Map<String, String>>();
+
+        for (int i = 0; i < listData.size(); i++) {
+
+            Map<String, String> mapData = listData.get(i);
+            String KEY_JSON = mapData.get("KEY_NAME");
+
+            String _id = mapAlldataTab.get(KEY_JSON);
+            if (_id != null && _id.length() > 0) {
+                mapData.put("_id", _id);
+                listUpdate.add(mapData);
+            } else {
+                listAdd.add(mapData);
+            }
+        }
+
+        DBHealper dbAdd = new DBHealper(this, contextEx, "data", null, 1, listAdd, mapSystem);
+
+        if (dbAdd.AddlistData()) {
+            Toast.makeText(contextEx, "успешная загрузка данных!", Toast.LENGTH_SHORT).show();
+        }
+
+        DBHealper dbUpdate = new DBHealper(this, contextEx, "data", null, 1, listUpdate, mapSystem);
+
+        if (dbUpdate.updateListData()) {
+            Toast.makeText(contextEx, "успешное обновление данных!", Toast.LENGTH_SHORT).show();
+        }
+
+        mapAlldataTab.clear();
+    }
+
+    public void deleteExObject(Map<String, String> mapParamString) {
+
+    }
+
+    public static boolean isNetworkConnectedOrConnecting(Context context) {
+        final ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        final NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+        return networkInfo != null && networkInfo.isConnectedOrConnecting();
+    }
+
+    public void setContextEx(Context contextEx) {
+        this.contextEx = contextEx;
+    }
+
+    public Boolean getsuccessfulAutorisation() {
+        return successfulAutorisation;
+    }
+
+    private String getformatLocation(String lat, String longt) {
+        if (lat == null && longt == null)
+            return "";
+        return
+                "Coordinates: lat = " + lat + " lon = " + longt + " " +
+                        new Date(new SimpleDateFormat("yyyy/M/dd hh:mm:ss").format(Calendar.getInstance().getTime()));
+    }
+
+    public Bitmap getBitmapfromBase64(String image) {
+        // Декодируем строку Base64 в массив байтов
+        if (image==null){
+            return null;
+        }
+
+        byte[] decodedString = Base64.decode(image, Base64.DEFAULT);
+
+        // Декодируем массив байтов в изображение
+
+        Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+
+        // Помещаем изображение в ImageView
+       return decodedByte;
+    }
+
+    public void setCr(ContentResolver cr) {
+        this.cr = cr;
+    }
+
+    private String encodeImageForBase64(Bitmap bm)
+    {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bm.compress(Bitmap.CompressFormat.JPEG,100,baos);
+        byte[] b = baos.toByteArray();
+        String encImage = Base64.encodeToString(b, Base64.DEFAULT);
+
+        return encImage;
+    }
+
+
+    @Override
+    protected String doInBackground(String... strings) {
+        return null;
+    }
+}

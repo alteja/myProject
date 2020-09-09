@@ -1,0 +1,143 @@
+package com.gmail.incuranse_dn.ui.Adapters;
+
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.view.LayoutInflater;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+
+
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.gmail.incuranse_dn.R;
+
+import java.util.HashMap;
+import java.util.List;
+
+
+public class RVAdapter extends RecyclerView.Adapter<RVAdapter.ViewHolder> {
+
+    private LayoutInflater inflater;
+    List<Object> DataList;
+    private static ClickListener clickListener;
+    Context context;
+
+
+    public RVAdapter(Context context, List<Object> DataList) {
+        this.context = context;
+        this.DataList = DataList;
+        this.inflater = LayoutInflater.from(context);
+    }
+
+
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+
+        View view = inflater.inflate(R.layout.cars_rv_item, parent, false);
+        return new ViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(RVAdapter.ViewHolder holder, int position) {
+
+        HashMap<String, Object> mapListCars;
+        mapListCars = (HashMap<String, Object>) DataList.get(position);
+        String is_active = mapListCars.get("Активен").toString();
+
+         holder.tvNameCar.setText(mapListCars.get("Наименование авто").toString());
+         holder.tvVINCar.setText(mapListCars.get("VIN").toString());
+         holder.tv_id.setText(mapListCars.get("id автомобиля").toString());
+         holder.IS_ACTIVE.setText(is_active);
+
+         if (is_active.equals("1")){
+            Drawable actual_element = ContextCompat.getDrawable(holder.image_car_item.getContext(),R.drawable.actual_element_24dp);
+            holder.image_car_item.setImageDrawable(actual_element);
+         }
+
+        if (is_active.equals("0")){
+            Drawable actual_element = ContextCompat.getDrawable(holder.image_car_item.getContext(),R.drawable.delete_element_24dp);
+            holder.image_car_item.setImageDrawable(actual_element);
+        }
+
+
+    }
+
+
+    @Override
+    public int getItemCount() {
+        return DataList.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener, View.OnLongClickListener {
+        //   final ImageView imageView;
+        final TextView tvNameCar, tvVINCar,IS_ACTIVE,tv_id;
+        final ImageView image_car_item;
+        final RelativeLayout rl_item;
+
+        ViewHolder(@NonNull View itemView) {
+            super(itemView);
+
+            itemView.setOnClickListener(this);
+            itemView.setOnLongClickListener(this);
+            //  imageView = (ImageView)view.findViewById(R.id.image);
+            tvNameCar = (TextView) itemView.findViewById(R.id.tvNameCar);
+            tvVINCar = (TextView) itemView.findViewById(R.id.tvVINCar);
+            tv_id = (TextView) itemView.findViewById(R.id.tv_id);
+            IS_ACTIVE = (TextView) itemView.findViewById(R.id.IS_ACTIVE);
+            image_car_item = (ImageView) itemView.findViewById(R.id.image_car_item);
+            rl_item = (RelativeLayout) itemView.findViewById(R.id.rl_item);
+        }
+
+        @Override
+        public void onClick(View v) {
+
+            clickListener.onItemClick(getLayoutPosition(), v);
+        }
+
+        @Override
+        public boolean onLongClick(View v) {
+
+            if(v.getId()==-1){
+                v.setBackgroundColor(Color.parseColor("#A8E7DDDD"));
+                // v.tvNameCar.setTextColor(Color.parseColor("#ffffff"));
+            }
+            else
+            {
+                v.getBackground().clearColorFilter();
+                // holder.tvNameCar.setTextColor(Color.parseColor("#000000"));
+            }
+
+
+            clickListener.onItemLongClick(getLayoutPosition(), v);
+            return true;
+        }
+
+
+    }
+
+    public void setOnItemClickListener(ClickListener clickListener) {
+        RVAdapter.clickListener = clickListener;
+    }
+
+    public interface ClickListener {
+        void onItemClick(int position, View v);
+        boolean onItemLongClick(int position, View v);
+    }
+
+
+    public long getItemId(int position) {
+        return (Long) DataList.get(position);
+    }
+
+
+}
+
+

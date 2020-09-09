@@ -1,0 +1,261 @@
+package com.gmail.incuranse_dn.ui.main;
+
+import android.Manifest;
+import android.annotation.TargetApi;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+
+
+import com.gmail.incuranse_dn.ui.STO.STOActivity;
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.gmail.incuranse_dn.R;
+import com.gmail.incuranse_dn.ui.cars.cars;
+import com.gmail.incuranse_dn.ui.Request.Requests;
+import com.gmail.incuranse_dn.ui.profile.Profile;
+
+import android.telephony.TelephonyManager;
+import android.text.TextUtils;
+import android.view.MenuItem;
+
+import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.GravityCompat;
+
+import com.gmail.incuranse_dn.ui.tools.tools;
+import com.google.android.material.navigation.NavigationView;
+
+import androidx.drawerlayout.widget.DrawerLayout;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+
+import android.view.Menu;
+import android.view.View;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.security.Key;
+import java.security.KeyStore;
+import java.util.HashMap;
+import java.util.Map;
+
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+
+    private static final String TAG = "LOG";
+    private static final int MY_PERMISSIONS_WRITE_EXTERNAL_STORAGE = 100;
+    final protected String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    String idCustomer;
+
+    private int progress = 0;
+    private TextView tvProgressCircle;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+
+
+        if (ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)!= PackageManager.PERMISSION_GRANTED) {
+            // Permission is not granted
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+            } else {
+                // No explanation needed; request the permission
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        MY_PERMISSIONS_WRITE_EXTERNAL_STORAGE);
+            }
+        }
+
+        Intent intent = getIntent();
+        idCustomer = intent.getExtras().getString("idClientJSON");
+
+        setContentView(R.layout.activity_main);
+        Toolbar toolbar = findViewById(R.id.tb_req);
+        setSupportActionBar(toolbar);
+
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        drawer.openDrawer(GravityCompat.START);
+
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+
+        drawer.addDrawerListener(toggle);
+        toggle.syncState();
+
+        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(this);
+
+
+    }
+
+
+    @Override
+    public void onBackPressed() {
+        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+
+    @TargetApi(Build.VERSION_CODES.M)
+    @SuppressWarnings("StatementWithEmptyBody")
+    @Override
+    public boolean onNavigationItemSelected(MenuItem item) {
+        // Handle navigation view item clicks here.
+        int id = item.getItemId();
+
+        if (id == R.id.nav_req) {
+            Intent int_req = new Intent(this, Requests.class);
+            startActivity(int_req);
+        } else if (id == R.id.nav_cars) {
+            Intent int_cars = new Intent(this, cars.class);
+            startActivity(int_cars);
+        } else if (id == R.id.nav_profile) {
+            Intent int_profile = new Intent(this, Profile.class);
+            startActivity(int_profile);
+        } else if (id == R.id.nav_tools) {
+            Intent int_tools = new Intent(this, tools.class);
+            startActivity(int_tools);
+        } else if (id == R.id.nav_close) {
+            this.finish();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        } else if (id == R.id.nav_exchange) {
+            try {
+
+               // tvProgressCircle     = (TextView)findViewById(R.id.tv_progress_circle);
+               // tvProgressCircle.setVisibility(View.VISIBLE);
+
+               // postProgress(progress);
+
+                Exchange ex = new Exchange();
+                ex.setContextEx(getBaseContext());
+                ex.setCr(getContentResolver());
+                ex.StartExchange(idCustomer,"");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if (id == R.id.nav_call) {
+
+            TelephonyManager tm = (TelephonyManager)getSystemService(this.TELEPHONY_SERVICE);
+
+            if (tm.getNetworkOperatorName().length()==0){
+                Toast.makeText(this, "В мобильном устройстве отсутствует SIM-карта.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+
+            String phoneNo = "";
+
+            //получим телефон страховой
+            Map<String, String> mapSystem = new HashMap<String, String>();
+            mapSystem.put("NAME_TAB", "TAB_CONTACTS_INCURANSE");
+            mapSystem.put("operation", "DATA_OPERATION_READ");
+
+            DBHealper dbContactsIncuranse = new DBHealper(this, this, "data", null, 1, null, mapSystem, null);
+
+            Cursor cursor_inc = dbContactsIncuranse.RaedDataCursorList("TAB_CONTACTS_INCURANSE", "1");
+            String type_contact = "";
+            String view_contact = "";
+
+            if (cursor_inc.moveToFirst()) {
+
+                type_contact = cursor_inc.getString(cursor_inc.getColumnIndex("type_contact")).toString();
+                view_contact = cursor_inc.getString(cursor_inc.getColumnIndex("view_contact")).toString();
+
+                if (type_contact.equals("Телефон") && view_contact.equals("Основной")) {
+                    phoneNo = cursor_inc.getString(cursor_inc.getColumnIndex("contact"));
+                }
+
+            }
+
+            if (phoneNo.length() == 0) {
+                Toast.makeText(this, "В приложении не указан номер страховой", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+
+            if (!TextUtils.isEmpty(phoneNo)) {
+                String dial = "tel:" + phoneNo;
+                if (checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CALL_PHONE}, 1);
+                }
+                try {
+                    startActivity(new Intent(Intent.ACTION_CALL, Uri.parse(dial)));
+                }catch (Exception e){
+                    Toast.makeText(this, "В мобильном устройстве отсутствует SIM-карта.", Toast.LENGTH_SHORT).show();
+                }
+
+            } else {
+            }
+
+        }else if (id == R.id.nav_unload_data) {
+            Exchange ex = new Exchange();
+            ex.setContextEx(this.getBaseContext());
+
+            try {
+                ex.PostListRequests();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            // Map<String,String> textPost = ex.createPostDataRequests();
+        }else if (id==R.id.nav_STO){
+
+            Intent int_STO = new Intent(this, STOActivity.class);
+            startActivity(int_STO);
+
+        }
+
+        //DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+       // drawer.closeDrawer(GravityCompat.START);
+        return true;
+    }
+
+    private void postProgress(int progress) {
+        String strProgress = String.valueOf(progress) + " %";
+        tvProgressCircle.setText(strProgress);
+    }
+
+
+}
+
+
+
+
+

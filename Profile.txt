@@ -1,0 +1,225 @@
+package com.gmail.incuranse_dn.ui.profile;
+
+import android.database.Cursor;
+import android.os.Bundle;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Toast;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+
+import androidx.fragment.app.Fragment;
+import androidx.viewpager.widget.ViewPager;
+
+import com.gmail.incuranse_dn.ui.main.MainClass;
+import com.gmail.incuranse_dn.ui.ui.other.DBHealper;
+import com.gmail.incuranse_dn.R;
+import com.google.android.material.tabs.TabLayout;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Profile extends AppCompatActivity  {
+
+    Toolbar tb_profile;
+    TabLayout tb_layot_profile;
+
+    ViewPager container;
+    ViewPagerAdapter mViewPagerAdapter;
+
+    public Map<String, String> data_fr_common = new HashMap<String, String>();
+    public Map<String, String> data_fr_info = new HashMap<String, String>();
+
+    final protected String NAME_TAB = "TAB_CLIENTS";
+
+    final protected String DATA_OPERATION_SAVE = "DATA_OPERATION_SAVE";
+    final protected String DATA_OPERATION_READ = "DATA_OPERATION_READ";
+    final protected String DATA_OPERATION_UPDATE = "DATA_OPERATION_UPDATE";
+
+    boolean openOldCl = false;
+
+    String id_client = "0";
+    String ac = "";
+
+    //получим первоначальные данные для дальнейшего получения изменений.
+    Map<String, String> initialData = new HashMap<String, String>();
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_profile);
+
+        tb_profile = (Toolbar) findViewById(R.id.tb_common_info_profile);
+        setSupportActionBar(tb_profile);
+        getSupportActionBar().setTitle("Профиль");
+
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
+
+        tb_profile.setNavigationOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onBackPressed();// возврат на предыдущий activity
+            }
+        });
+
+        tb_layot_profile = findViewById(R.id.tb_layot_profile);
+        container = findViewById(R.id.container);
+
+        Cursor cursor = null;
+
+        Map<String, String> mapSystem = new HashMap<String, String>();
+        mapSystem.put("operation", DATA_OPERATION_READ);
+        mapSystem.put("NAME_TAB", NAME_TAB);
+
+        //получим основную таблицу
+        DBHealper db = new DBHealper(this,this,"data",null,1,null,mapSystem,null);
+        cursor = db.RaedDataCursor(NAME_TAB,null, null);
+
+        Map<String,String> map_data_info = new HashMap<String,String>();
+        Map<String,String> map_data_common = new HashMap<String,String>();
+
+        //при открытии старой карты клиента, получаем данные основной таблицы из курсора
+        if (cursor.moveToFirst()) {
+
+            map_data_common.put("NameClient",cursor.getString(cursor.getColumnIndex("NameClient")));
+            map_data_common.put("FamClient",cursor.getString(cursor.getColumnIndex("FamClient")));
+            map_data_common.put("PatronymicClient",cursor.getString(cursor.getColumnIndex("PatronymicClient")));
+
+            map_data_info.put("DateBirthClient",cursor.getString(cursor.getColumnIndex("DateBirthClient")));
+            map_data_info.put("INNClient",cursor.getString(cursor.getColumnIndex("INNClient")));
+
+            id_client = cursor.getString(cursor.getColumnIndex("_id"));
+            openOldCl = true;
+
+            map_data_common.putAll(initialData);
+            map_data_info.putAll(initialData);
+        }
+        cursor.close();
+
+        //установим старые данные на случай,если страницы не будут пролистываться
+        getDataCommon(map_data_common);
+        getDataInfo(map_data_info);
+
+        Bundle b_contacts = new Bundle();
+
+        mViewPagerAdapter = new ViewPagerAdapter(getSupportFragmentManager(),1,tb_layot_profile.getTabCount());
+
+        mViewPagerAdapter.addFragment(Fragment_common_info_profile.newInstance(map_data_common),"Общая");
+        mViewPagerAdapter.addFragment(FragmentContacts.newInstance(b_contacts),"Контакты");
+        mViewPagerAdapter.addFragment(FragmentInfo.newInstance(map_data_info), "Информация");
+
+        container.setAdapter(mViewPagerAdapter);
+
+        tb_layot_profile.setupWithViewPager(container);
+
+    }
+
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_settings) {
+            return true;
+        }else
+        if (id==android.R.id.home) {
+            finish();
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    public void getDataCommon(Map<String, String> data_common_from_fr){
+        data_fr_common = data_common_from_fr;
+    }
+
+    public void getDataInfo(Map<String, String> data_info_from_fr){
+        data_fr_info = data_info_from_fr;
+
+    }
+
+    public void SaveContact(){
+
+        String nameClient = "";
+        String FamClient = "";
+        String PatronymicClient = "";
+
+        String INNClient = "";
+        String DateBirthClient = "";
+
+        if (openOldCl){
+            ac = DATA_OPERATION_UPDATE;
+        }else {
+            ac = DATA_OPERATION_SAVE;
+        }
+
+        if (data_fr_common.size()>0){
+            nameClient = data_fr_common.get("NameClient");
+            FamClient = data_fr_common.get("FamClient");
+            PatronymicClient = data_fr_common.get("PatronymicClient");
+        }
+
+        if (data_fr_info.size()>0){
+             INNClient = data_fr_info.get("INNClient");
+             DateBirthClient = data_fr_info.get("DateBirthClient");
+        }
+
+        Map<String, String> mapParamString = new HashMap<String, String>();
+        Map<String, String> mapSystem = new HashMap<String, String>();
+        Map<String, String> mapType = new HashMap<String, String>();
+
+
+        //системные данные основной таблицы
+        mapSystem.put("operation", ac);
+        mapSystem.put("NAME_TAB", NAME_TAB);
+
+        //типы данных основной таблицы
+        mapType.put("NameClient", "TEXT");
+        mapType.put("FamClient", "TEXT");
+        mapType.put("PatronymicClient", "TEXT");
+        mapType.put("INNClient","TEXT");
+        mapType.put("DateBirthClient","TEXT");
+
+        //основная таблица заявки
+        mapParamString.put("NameClient", nameClient);
+        mapParamString.put("FamClient", FamClient);
+        mapParamString.put("PatronymicClient", PatronymicClient);
+        mapParamString.put("INNClient", INNClient);
+        mapParamString.put("DateBirthClient", DateBirthClient);
+
+
+        //передаем данные
+        DBHealper db = new DBHealper(this, this, "data",null, 1, mapParamString,mapSystem,mapType);
+
+        DBHealper dbInitial = null;
+
+        if (ac == DATA_OPERATION_SAVE) {
+
+           if (db.AddData()>0){
+                Toast.makeText(getApplicationContext(), "client is added!",Toast.LENGTH_SHORT).show();
+           }else{
+               Toast.makeText(getApplicationContext(), "ERROR added client!",Toast.LENGTH_SHORT).show();
+          }
+
+        }
+        if (ac == DATA_OPERATION_UPDATE) {
+            if (db.updateData(id_client)){
+                MainClass mClass = new MainClass();
+                if (mClass.checkInitialObject(mapParamString,initialData)){
+                    dbInitial = new DBHealper(this, this, "data",null, 1, mapParamString,mapSystem,mapType);
+
+                }
+                Toast.makeText(getApplicationContext(), "client is saved!",Toast.LENGTH_SHORT).show();
+            }else{
+                Toast.makeText(getApplicationContext(), "ERROR saving data!",Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
+
+
+}
